@@ -1234,6 +1234,13 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
  */
 -(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error;
 
+
+/*
+ Set Common Event Data Map.
+ This will be sent directly in eventData
+ */
+-(void)setCommonEventData:(NSDictionary<NSString*,id>*_Nonnull)data;
+
 @end
 
 #pragma clang diagnostic pop

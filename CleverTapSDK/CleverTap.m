@@ -279,7 +279,7 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 // static here as we may have multiple instances handling inapps
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
-
+static NSDictionary<NSString*,id>* _commonEventData;
 
 #pragma mark - Lifecycle
 
@@ -290,6 +290,7 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 + (void)initialize {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
         _instances = [NSMutableDictionary new];
         _plistInfo = [CTPlistInfo sharedInstance];
         pendingNotificationControllers = [NSMutableArray new];
@@ -298,6 +299,11 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         sslCertNames = @[@"DigiCertGlobalRootCA", @"DigiCertSHA2SecureServerCA"];
 #endif
     });
+}
+
+- (void)setCommonEventData:(NSDictionary<NSString*,id>*)data{
+    _commonEventData = data;
+    [[NSUserDefaults standardUserDefaults] setObject:data forKey:@"commonEventData"];
 }
 
 + (void)onDidFinishLaunchingNotification:(NSNotification *)notification {
@@ -2535,15 +2541,14 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
     if(userId != nil){
         mutableEvtData[@"userId"] = userId;
     }
-    id deviceId = [self.localDataStore getProfileFieldForKey:@"deviceId"];
-    if(deviceId != nil){
-        mutableEvtData[@"deviceId"] = deviceId;
-    }
     NSString* userType = [self.localDataStore getProfileFieldForKey:@"userType"];
     if(userType == nil){
         userType = _plistInfo.userType;
     }
     mutableEvtData[@"userType"] = userType;
+    if(_commonEventData != nil){
+        [mutableEvtData addEntriesFromDictionary:_commonEventData];
+    }
     mutableEvent[@"evtData"] = mutableEvtData;
 }
 
