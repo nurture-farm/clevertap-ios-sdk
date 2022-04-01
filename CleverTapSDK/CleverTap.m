@@ -3327,6 +3327,61 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
     }];
 }
 
+-(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error{
+    
+    [self runSerialAsync:^{
+        
+        // set OptOut to false for the old user
+        self.currentUserOptedOut = NO;
+        
+        // unregister the push token on the current user
+        [self pushDeviceTokenWithAction:CleverTapPushTokenUnregister];
+        
+        // clear any events in the queue
+        [self clearQueue];
+        
+        // clear ARP and other context for the old user
+        [self clearUserContext];
+        
+        // clear old profile data
+        [self.localDataStore changeUser];
+        
+        [self resetSession];
+        
+    
+        [self recordDeviceErrors];
+        
+#if !CLEVERTAP_NO_INAPP_SUPPORT
+        if (![[self class] runningInsideAppExtension]) {
+            [self.inAppFCManager changeUserWithGuid: self.deviceInfo.deviceId];
+        }
+#endif
+        
+        [self _setCurrentUserOptOutStateFromStorage];  // be sure to do this AFTER updating the GUID
+        
+#if !CLEVERTAP_NO_INBOX_SUPPORT
+        [self _resetInbox];
+#endif
+        
+#if !CLEVERTAP_NO_DISPLAY_UNIT_SUPPORT
+        [self _resetDisplayUnit];
+#endif
+        
+        [self _resetFeatureFlags];
+        
+        [self _resetProductConfig];
+    
+        
+        [self pushDeviceTokenWithAction:CleverTapPushTokenRegister];
+        [self notifyUserProfileInitialized];
+        
+        if(onSuccess != nil){
+            onSuccess();
+        }
+    }];
+    
+}
+
 - (void)_pushBaseProfile {
     [self runSerialAsync:^{
         NSMutableDictionary *profile = [[self.localDataStore generateBaseProfile] mutableCopy];

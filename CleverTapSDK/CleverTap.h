@@ -1228,6 +1228,12 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 - (BOOL)handleMessage:(NSDictionary<NSString *, id> *)message forWatchSession:(WCSession *)session API_AVAILABLE(ios(9.0));
 #endif
 
+
+/*
+ Calling this clears the existing user session
+ */
+-(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error;
+
 @end
 
 #pragma clang diagnostic pop
