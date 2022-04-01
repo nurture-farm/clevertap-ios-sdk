@@ -210,7 +210,6 @@ typedef NS_ENUM(NSInteger, CleverTapInAppRenderingStatus) {
 @property (atomic, assign) BOOL offline;
 @property (atomic, assign) BOOL enableNetworkInfoReporting;
 @property (atomic, assign) BOOL appLaunchProcessed;
-@property (atomic, assign) BOOL appLaunchProcessesingInProgress;
 @property (atomic, assign) BOOL initialEventsPushed;
 @property (atomic, assign) CLLocationCoordinate2D userSetLocation;
 @property (nonatomic, assign) double lastLocationPingTime;
@@ -1404,13 +1403,6 @@ static NSDictionary<NSString*,id>* _commonEventData;
         return;
     }
     
-    if (self.appLaunchProcessesingInProgress) {
-        CleverTapLogInternal(self.config.logLevel, @"%@: App Launched already in processing", self);
-        return;
-    }
-    
-    self.appLaunchProcessesingInProgress = YES;
-    
     if (self.config.disableAppLaunchedEvent) {
         CleverTapLogDebug(self.config.logLevel, @"%@: Dropping App Launched event - reporting disabled in instance configuration", self);
         return;
@@ -2539,6 +2531,14 @@ static NSDictionary<NSString*,id>* _commonEventData;
     }
 }
 
+-(void) addAdditionalEventData:(NSMutableDictionary*) mutableEvent {
+    NSMutableDictionary *mutableEvtData = [NSMutableDictionary dictionaryWithDictionary:mutableEvent[@"evtData"]];
+    mutableEvtData[@"userId"] = [self.localDataStore getProfileFieldForKey:@"userId"];
+    mutableEvtData[@"deviceId"] = [self.localDataStore getProfileFieldForKey:@"deviceId"];
+    mutableEvtData[@"userType"] = [self.localDataStore getProfileFieldForKey:@"userType"];
+    mutableEvent[@"evtData"] = mutableEvtData;
+}
+
 - (void)processEvent:(NSDictionary *)event withType:(CleverTapEventType)eventType {
     @try {
         // just belt and suspenders
@@ -2578,11 +2578,7 @@ static NSDictionary<NSString*,id>* _commonEventData;
             if (bundleIdentifier) {
                 mutableEvent[@"pai"] = bundleIdentifier;
             }
-            NSMutableDictionary *mutableEvtData = [NSMutableDictionary dictionaryWithDictionary:mutableEvent[@"evtData"]];
-            mutableEvtData = [self.localDataStore getProfileFieldForKey:@"userId"];
-            mutableEvtData = [self.localDataStore getProfileFieldForKey:@"deviceId"];
-            mutableEvtData = [self.localDataStore getProfileFieldForKey:@"userType"];
-            mutableEvent[@"evtData"] = mutableEvtData;
+            [self addAdditionalEventData:mutableEvent];
             
         } else {
             type = @"event";
@@ -2590,6 +2586,7 @@ static NSDictionary<NSString*,id>* _commonEventData;
             if (bundleIdentifier) {
                 mutableEvent[@"pai"] = bundleIdentifier;
             }
+            [self addAdditionalEventData:mutableEvent];
         }
         mutableEvent[@"type"] = type;
         mutableEvent[@"ep"] = @((int) [[NSDate date] timeIntervalSince1970]);
