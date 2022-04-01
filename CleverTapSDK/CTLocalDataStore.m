@@ -26,7 +26,7 @@ NSString* const kLocalCacheExpiry = @"local_cache_expiry";
 
 @implementation CTLocalDataStore
 
-- (instancetype)initWithConfig:(CleverTapInstanceConfig *)config andProfileValues:(NSDictionary*)profileValues {
+- (instancetype)initWithConfig:(CleverTapInstanceConfig *)config andProfileValues:(NSDictionary*)profileValues completionHandler:(void(^ _Nonnull )(void))completion {
     if (self = [super init]) {
         _config = config;
         localProfileUpdateExpiryStore = [NSMutableDictionary new];
@@ -38,6 +38,10 @@ NSString* const kLocalCacheExpiry = @"local_cache_expiry";
                 self->localProfileForSession = [self _inflateLocalProfile];
                 for (NSString* key in [profileValues allKeys]) {
                     [self setProfileFieldWithKey:key andValue:profileValues[key]];
+                }
+                self->_isProfileDataLoaded = YES;
+                if(completion != nil){
+                    completion();
                 }
             }
         }];

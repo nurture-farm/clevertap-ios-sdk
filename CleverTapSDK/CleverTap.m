@@ -210,6 +210,7 @@ typedef NS_ENUM(NSInteger, CleverTapInAppRenderingStatus) {
 @property (atomic, assign) BOOL offline;
 @property (atomic, assign) BOOL enableNetworkInfoReporting;
 @property (atomic, assign) BOOL appLaunchProcessed;
+@property (atomic, assign) BOOL appLaunchProcessesingInProgress;
 @property (atomic, assign) BOOL initialEventsPushed;
 @property (atomic, assign) CLLocationCoordinate2D userSetLocation;
 @property (nonatomic, assign) double lastLocationPingTime;
@@ -278,7 +279,7 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 // static here as we may have multiple instances handling inapps
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
-
+static NSDictionary<NSString*,id>* _commonEventData;
 
 #pragma mark - Lifecycle
 
@@ -289,6 +290,7 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 + (void)initialize {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
         _instances = [NSMutableDictionary new];
         _plistInfo = [CTPlistInfo sharedInstance];
         pendingNotificationControllers = [NSMutableArray new];
@@ -297,6 +299,11 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         sslCertNames = @[@"DigiCertGlobalRootCA", @"DigiCertSHA2SecureServerCA"];
 #endif
     });
+}
+
+- (void)setCommonEventData:(NSDictionary<NSString*,id>*)data{
+    _commonEventData = data;
+    [[NSUserDefaults standardUserDefaults] setObject:data forKey:@"commonEventData"];
 }
 
 + (void)onDidFinishLaunchingNotification:(NSNotification *)notification {
@@ -632,7 +639,9 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         if (_deviceInfo.timeZone&& ![_deviceInfo.timeZone isEqualToString:@""]) {
             initialProfileValues[CLTAP_SYS_TZ] = _deviceInfo.timeZone;
         }
-        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues];
+        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues completionHandler:^{
+            //TODO:Debo handle it here
+        }];
         
         _serialQueue = dispatch_queue_create([_config.queueLabel UTF8String], DISPATCH_QUEUE_SERIAL);
         dispatch_queue_set_specific(_serialQueue, kQueueKey, (__bridge void *)self, NULL);
@@ -1386,6 +1395,8 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 }
 
 - (void)recordAppLaunched:(NSString *)caller {
+    NSString *userName = [_localDataStore getProfileFieldForKey:@"userName"];
+    NSLog(@"Username is %@",userName);
     if ([[self class] runningInsideAppExtension]) return;
     
     if (self.appLaunchProcessed) {
@@ -1393,7 +1404,12 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         return;
     }
     
-    self.appLaunchProcessed = YES;
+    if (self.appLaunchProcessesingInProgress) {
+        CleverTapLogInternal(self.config.logLevel, @"%@: App Launched already in processing", self);
+        return;
+    }
+    
+    self.appLaunchProcessesingInProgress = YES;
     
     if (self.config.disableAppLaunchedEvent) {
         CleverTapLogDebug(self.config.logLevel, @"%@: Dropping App Launched event - reporting disabled in instance configuration", self);
@@ -1409,6 +1425,7 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
     if (self.lastUTMFields) {
         [event addEntriesFromDictionary:self.lastUTMFields];
     }
+    self.appLaunchProcessed = YES;
     [self queueEvent:event withType:CleverTapEventTypeRaised];
 }
 
@@ -2487,10 +2504,19 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         return;
     }
     
+    BOOL shouldDeferProcessingEvent = NO;
+    if([self shouldDeferProcessingEvent:event withType:type]){
+        shouldDeferProcessingEvent = TRUE;
+        CleverTapLogDebug(self.config.logLevel, @"%@: App Launched not yet processed re-queueing: %@, %lu", self, event, (long)type);
+    }
+    else if(!self.localDataStore.isProfileDataLoaded){
+        shouldDeferProcessingEvent = TRUE;
+        CleverTapLogDebug(self.config.logLevel, @"%@: Profile Data not yet loaded re-queueing: %@, %lu", self, event, (long)type);
+    }
+    
     // make sure App Launched is processed first
     // if not defer this one; push back on the queue
-    if ([self shouldDeferProcessingEvent:event withType:type]) {
-        CleverTapLogDebug(self.config.logLevel, @"%@: App Launched not yet processed re-queueing: %@, %lu", self, event, (long)type);
+    if (shouldDeferProcessingEvent) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             [self runSerialAsync:^{
                 [self queueEvent:event withType:type];
@@ -2552,6 +2578,12 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
             if (bundleIdentifier) {
                 mutableEvent[@"pai"] = bundleIdentifier;
             }
+            NSMutableDictionary *mutableEvtData = [NSMutableDictionary dictionaryWithDictionary:mutableEvent[@"evtData"]];
+            mutableEvtData = [self.localDataStore getProfileFieldForKey:@"userId"];
+            mutableEvtData = [self.localDataStore getProfileFieldForKey:@"deviceId"];
+            mutableEvtData = [self.localDataStore getProfileFieldForKey:@"userType"];
+            mutableEvent[@"evtData"] = mutableEvtData;
+            
         } else {
             type = @"event";
             NSString *bundleIdentifier = _deviceInfo.bundleId;
@@ -3626,8 +3658,12 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 }
 
 - (void)recordEvent:(NSString *)event withProps:(NSDictionary *)properties {
+    NSMutableDictionary *mutableProperties = [[NSMutableDictionary alloc] init];
+    if(_commonEventData != nil){
+        [mutableProperties addEntriesFromDictionary:_commonEventData];
+    }
     [self runSerialAsync:^{
-        [CTEventBuilder build:event withEventActions:properties completionHandler:^(NSDictionary *event, NSArray<CTValidationResult*>*errors) {
+        [CTEventBuilder build:event withEventActions:mutableProperties completionHandler:^(NSDictionary *event, NSArray<CTValidationResult*>*errors) {
             if (event) {
                 [self queueEvent:event withType:CleverTapEventTypeRaised];
             }
@@ -4809,6 +4845,5 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
     }];
 #endif
 }
-
 
 @end
