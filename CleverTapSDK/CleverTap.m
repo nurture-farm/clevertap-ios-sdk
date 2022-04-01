@@ -278,7 +278,7 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 // static here as we may have multiple instances handling inapps
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
-static NSDictionary<NSString*,id>* _commonEventData;
+
 
 #pragma mark - Lifecycle
 
@@ -289,7 +289,6 @@ static NSDictionary<NSString*,id>* _commonEventData;
 + (void)initialize {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
         _instances = [NSMutableDictionary new];
         _plistInfo = [CTPlistInfo sharedInstance];
         pendingNotificationControllers = [NSMutableArray new];
@@ -298,11 +297,6 @@ static NSDictionary<NSString*,id>* _commonEventData;
         sslCertNames = @[@"DigiCertGlobalRootCA", @"DigiCertSHA2SecureServerCA"];
 #endif
     });
-}
-
-- (void)setCommonEventData:(NSDictionary<NSString*,id>*)data{
-    _commonEventData = data;
-    [[NSUserDefaults standardUserDefaults] setObject:data forKey:@"commonEventData"];
 }
 
 + (void)onDidFinishLaunchingNotification:(NSNotification *)notification {
@@ -1394,14 +1388,14 @@ static NSDictionary<NSString*,id>* _commonEventData;
 }
 
 - (void)recordAppLaunched:(NSString *)caller {
-    NSString *userName = [_localDataStore getProfileFieldForKey:@"userName"];
-    NSLog(@"Username is %@",userName);
     if ([[self class] runningInsideAppExtension]) return;
     
     if (self.appLaunchProcessed) {
         CleverTapLogInternal(self.config.logLevel, @"%@: App Launched already processed", self);
         return;
     }
+    
+    self.appLaunchProcessed = YES;
     
     if (self.config.disableAppLaunchedEvent) {
         CleverTapLogDebug(self.config.logLevel, @"%@: Dropping App Launched event - reporting disabled in instance configuration", self);
@@ -1417,7 +1411,6 @@ static NSDictionary<NSString*,id>* _commonEventData;
     if (self.lastUTMFields) {
         [event addEntriesFromDictionary:self.lastUTMFields];
     }
-    self.appLaunchProcessed = YES;
     [self queueEvent:event withType:CleverTapEventTypeRaised];
 }
 
@@ -3655,12 +3648,8 @@ static NSDictionary<NSString*,id>* _commonEventData;
 }
 
 - (void)recordEvent:(NSString *)event withProps:(NSDictionary *)properties {
-    NSMutableDictionary *mutableProperties = [[NSMutableDictionary alloc] init];
-    if(_commonEventData != nil){
-        [mutableProperties addEntriesFromDictionary:_commonEventData];
-    }
     [self runSerialAsync:^{
-        [CTEventBuilder build:event withEventActions:mutableProperties completionHandler:^(NSDictionary *event, NSArray<CTValidationResult*>*errors) {
+        [CTEventBuilder build:event withEventActions:properties completionHandler:^(NSDictionary *event, NSArray<CTValidationResult*>*errors) {
             if (event) {
                 [self queueEvent:event withType:CleverTapEventTypeRaised];
             }

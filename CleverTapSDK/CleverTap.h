@@ -1228,9 +1228,6 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 - (BOOL)handleMessage:(NSDictionary<NSString *, id> *)message forWatchSession:(WCSession *)session API_AVAILABLE(ios(9.0));
 #endif
 
-
-- (void)setCommonEventData:(NSDictionary<NSString*,id>*_Nonnull)data;
-
 @end
 
 #pragma clang diagnostic pop
