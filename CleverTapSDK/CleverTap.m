@@ -81,6 +81,7 @@ NSString *const kQUEUE_NAME_EVENTS = @"events";
 NSString *const kQUEUE_NAME_NOTIFICATIONS = @"notifications";
 
 NSString *const kHANDSHAKE_URL = @"https://eu1.clevertap-prod.com/hello";
+NSString *const kHANDSHAKE_EVENT_PORTAL_URL = @"https://%@?rt=wzrkt.com/hello";
 
 NSString *const kREDIRECT_DOMAIN_KEY = @"CLTAP_REDIRECT_DOMAIN_KEY";
 NSString *const kREDIRECT_NOTIF_VIEWED_DOMAIN_KEY = @"CLTAP_REDIRECT_NOTIF_VIEWED_DOMAIN_KEY";
@@ -916,8 +917,12 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 - (void)doHandshakeAsync {
     [self runSerialAsync:^{
         if (![self needHandshake]) return;
-        CleverTapLogInternal(self.config.logLevel, @"%@: starting handshake with %@", self, kHANDSHAKE_URL);
-        NSMutableURLRequest *request = [self createURLRequestFromURL:[[NSURL alloc] initWithString:kHANDSHAKE_URL]];
+        NSString *handshakeURL = kHANDSHAKE_URL;
+        if(_plistInfo.eventPortalDomain != nil){
+            handshakeURL = [[NSString alloc] initWithFormat:kHANDSHAKE_EVENT_PORTAL_URL,_plistInfo.eventPortalDomain];
+        }
+        CleverTapLogInternal(self.config.logLevel, @"%@: starting handshake with %@", self, handshakeURL);
+        NSMutableURLRequest *request = [self createURLRequestFromURL:[[NSURL alloc] initWithString:handshakeURL]];
         request.HTTPMethod = @"GET";
         // Need to simulate a synchronous request
         dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
@@ -1034,13 +1039,13 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
     if (!self.redirectDomain) return nil;
     NSString *accountId = self.config.accountId;
     NSString *sdkRevision = self.deviceInfo.sdkVersion;
-    NSString *endpointDomain;
+    NSString *redirectDomain;
     if (queue == _notificationsQueue) {
-        endpointDomain = self.redirectNotifViewedDomain;
+        redirectDomain = self.redirectNotifViewedDomain;
     } else {
-        endpointDomain = self.redirectDomain;
+        redirectDomain = self.redirectDomain;
     }
-    NSString *endpointUrl = [[NSString alloc] initWithFormat:@"https://%@/a1?os=iOS&t=%@&z=%@", endpointDomain, sdkRevision, accountId];
+    NSString *endpointUrl = [[NSString alloc] initWithFormat:@"https://%@?rt=%@/a1&os=iOS&t=%@&z=%@", _plistInfo.eventPortalDomain, redirectDomain, sdkRevision, accountId];
     currentRequestTimestamp = (int) [[[NSDate alloc] init] timeIntervalSince1970];
     endpointUrl = [endpointUrl stringByAppendingFormat:@"&ts=%d", currentRequestTimestamp];
     return endpointUrl;
@@ -2526,9 +2531,19 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 
 -(void) addAdditionalEventData:(NSMutableDictionary*) mutableEvent {
     NSMutableDictionary *mutableEvtData = [NSMutableDictionary dictionaryWithDictionary:mutableEvent[@"evtData"]];
-    mutableEvtData[@"userId"] = [self.localDataStore getProfileFieldForKey:@"userId"];
-    mutableEvtData[@"deviceId"] = [self.localDataStore getProfileFieldForKey:@"deviceId"];
-    mutableEvtData[@"userType"] = [self.localDataStore getProfileFieldForKey:@"userType"];
+    id userId = [self.localDataStore getProfileFieldForKey:@"userId"];
+    if(userId != nil){
+        mutableEvtData[@"userId"] = userId;
+    }
+    id deviceId = [self.localDataStore getProfileFieldForKey:@"deviceId"];
+    if(deviceId != nil){
+        mutableEvtData[@"deviceId"] = deviceId;
+    }
+    NSString* userType = [self.localDataStore getProfileFieldForKey:@"userType"];
+    if(userType == nil){
+        userType = _plistInfo.userType;
+    }
+    mutableEvtData[@"userType"] = userType;
     mutableEvent[@"evtData"] = mutableEvtData;
 }
 
