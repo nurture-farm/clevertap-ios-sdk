@@ -72,6 +72,9 @@ static NSArray *sslCertNames;
 
 #import <objc/runtime.h>
 
+#import <AdSupport/ASIdentifierManager.h>
+#import <AppTrackingTransparency/AppTrackingTransparency.h>
+
 static const void *const kQueueKey = &kQueueKey;
 static const void *const kNotificationQueueKey = &kNotificationQueueKey;
 
@@ -280,6 +283,9 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
 static NSDictionary<NSString*,id>* _commonEventData;
+static NSString* _deviceId;
+static NSString* _fallbackDeviceId;
+static bool _trackingEnabled;
 
 #pragma mark - Lifecycle
 
@@ -292,6 +298,7 @@ static NSDictionary<NSString*,id>* _commonEventData;
     dispatch_once(&onceToken, ^{
         _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
         _instances = [NSMutableDictionary new];
+        [self fetchDeviceId];
         _plistInfo = [CTPlistInfo sharedInstance];
         pendingNotificationControllers = [NSMutableArray new];
 #if CLEVERTAP_SSL_PINNING
@@ -299,6 +306,50 @@ static NSDictionary<NSString*,id>* _commonEventData;
         sslCertNames = @[@"DigiCertGlobalRootCA", @"DigiCertSHA2SecureServerCA"];
 #endif
     });
+}
+
++ (void)setAdvertisementId:(ASIdentifierManager *)manager {
+    _trackingEnabled = YES;
+    _deviceId = manager.advertisingIdentifier.UUIDString;
+}
+
++(void) fetchDeviceId{
+    ASIdentifierManager *manager = [ASIdentifierManager sharedManager];
+    if (@available(iOS 14, *)) {
+        if (ATTrackingManager.trackingAuthorizationStatus == ATTrackingManagerAuthorizationStatusAuthorized) {
+            [self setAdvertisementId:manager];
+        } else{
+            [ATTrackingManager requestTrackingAuthorizationWithCompletionHandler:^(ATTrackingManagerAuthorizationStatus status) {
+                if(status == ATTrackingManagerAuthorizationStatusAuthorized){
+                    [self setAdvertisementId:manager];
+                }
+                else{
+                    [self fallbackDeviceId];
+                }
+            }];
+        }
+    } else {
+        if (manager.isAdvertisingTrackingEnabled) {
+            [self setAdvertisementId:manager];
+        } else {
+            [self fallbackDeviceId];
+        }
+    }
+}
+
++(void) fallbackDeviceId{
+    if (_fallbackDeviceId == nil) {
+        NSString *storedFallbackDeviceId = [[NSUserDefaults standardUserDefaults] stringForKey:@"fallbackDeviceId"];
+        if(storedFallbackDeviceId != nil){
+            _fallbackDeviceId = storedFallbackDeviceId;
+        }
+        else{
+            _fallbackDeviceId = [NSUUID UUID].UUIDString;
+            [[NSUserDefaults standardUserDefaults] setObject:_fallbackDeviceId forKey:@"fallbackDeviceId"];
+        }
+    }
+    _trackingEnabled = NO;
+    _deviceId = _fallbackDeviceId;
 }
 
 - (void)setCommonEventData:(NSDictionary<NSString*,id>*)data{
@@ -2509,6 +2560,10 @@ static NSDictionary<NSString*,id>* _commonEventData;
         shouldDeferProcessingEvent = TRUE;
         CleverTapLogDebug(self.config.logLevel, @"%@: Profile Data not yet loaded re-queueing: %@, %lu", self, event, (long)type);
     }
+    else if(_deviceId == nil){
+        shouldDeferProcessingEvent = TRUE;
+        CleverTapLogDebug(self.config.logLevel, @"%@: DeviceId not yet identified re-queueing: %@, %lu", self, event, (long)type);
+    }
     
     // make sure App Launched is processed first
     // if not defer this one; push back on the queue
@@ -2546,6 +2601,8 @@ static NSDictionary<NSString*,id>* _commonEventData;
         userType = _plistInfo.userType;
     }
     mutableEvtData[@"userType"] = userType;
+    mutableEvtData[@"deviceId"] = _deviceId;
+    mutableEvtData[@"trackingEnabled"] = [NSNumber numberWithBool:_trackingEnabled];
     if(_commonEventData != nil){
         [mutableEvtData addEntriesFromDictionary:_commonEventData];
     }
