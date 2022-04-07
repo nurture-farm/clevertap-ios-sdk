@@ -285,7 +285,7 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
 static NSDictionary<NSString*,id>* _commonEventData;
-static BOOL _deferClevertapEventsUntilDataLoaded = YES;
+static BOOL _deferClevertapEventsUntilDataLoaded;
 static NSString* _deviceId;
 static NSString* _fallbackDeviceId;
 static bool _trackingEnabled;
@@ -302,6 +302,9 @@ static bool _trackingEnabled;
         _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
         if ([[NSUserDefaults standardUserDefaults] objectForKey:kDeferSendingEventKey] != nil) {
             _deferClevertapEventsUntilDataLoaded = [[NSUserDefaults standardUserDefaults] boolForKey:kDeferSendingEventKey];
+        }
+        else{
+            _deferClevertapEventsUntilDataLoaded = YES;
         }
         _instances = [NSMutableDictionary new];
         [self fetchDeviceId];
@@ -4976,7 +4979,7 @@ static bool _trackingEnabled;
 
 -(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value{
     _deferClevertapEventsUntilDataLoaded = value;
-    [[NSUserDefaults standardUserDefaults] setBool:value forKey:kDeferSendingEventKey]
+    [[NSUserDefaults standardUserDefaults] setBool:value forKey:kDeferSendingEventKey];
 }
 
 @end
