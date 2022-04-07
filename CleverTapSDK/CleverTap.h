@@ -1228,6 +1228,21 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 - (BOOL)handleMessage:(NSDictionary<NSString *, id> *)message forWatchSession:(WCSession *)session API_AVAILABLE(ios(9.0));
 #endif
 
+
+/*
+ Calling this clears the existing user session
+ */
+-(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error;
+
+
+/*
+ Set Common Event Data Map.
+ This will be sent directly in eventData
+ */
+-(void)setCommonEventData:(NSDictionary<NSString*,id>*_Nonnull)data;
+
+-(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value;
+
 @end
 
 #pragma clang diagnostic pop

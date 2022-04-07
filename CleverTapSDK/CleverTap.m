@@ -72,6 +72,9 @@ static NSArray *sslCertNames;
 
 #import <objc/runtime.h>
 
+#import <AdSupport/ASIdentifierManager.h>
+#import <AppTrackingTransparency/AppTrackingTransparency.h>
+
 static const void *const kQueueKey = &kQueueKey;
 static const void *const kNotificationQueueKey = &kNotificationQueueKey;
 
@@ -81,6 +84,7 @@ NSString *const kQUEUE_NAME_EVENTS = @"events";
 NSString *const kQUEUE_NAME_NOTIFICATIONS = @"notifications";
 
 NSString *const kHANDSHAKE_URL = @"https://eu1.clevertap-prod.com/hello";
+NSString *const kHANDSHAKE_EVENT_PORTAL_URL = @"https://%@?rt=wzrkt.com/hello";
 
 NSString *const kREDIRECT_DOMAIN_KEY = @"CLTAP_REDIRECT_DOMAIN_KEY";
 NSString *const kREDIRECT_NOTIF_VIEWED_DOMAIN_KEY = @"CLTAP_REDIRECT_NOTIF_VIEWED_DOMAIN_KEY";
@@ -114,6 +118,8 @@ NSString *const CleverTapGeofencesDidUpdateNotification = CLTAP_GEOFENCES_DID_UP
 
 NSString *const kOnUserLoginAction = @"onUserLogin";
 NSString *const kInstanceWithCleverTapIDAction = @"instanceWithCleverTapID";
+
+NSString *const kDeferSendingEventKey = @"deferSendingEventKey";
 
 static int currentRequestTimestamp = 0;
 static int initialAppEnteredForegroundTime = 0;
@@ -278,7 +284,11 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 // static here as we may have multiple instances handling inapps
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
-
+static NSDictionary<NSString*,id>* _commonEventData;
+static BOOL _deferClevertapEventsUntilDataLoaded;
+static NSString* _deviceId;
+static NSString* _fallbackDeviceId;
+static bool _trackingEnabled;
 
 #pragma mark - Lifecycle
 
@@ -289,7 +299,15 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 + (void)initialize {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
+        if ([[NSUserDefaults standardUserDefaults] objectForKey:kDeferSendingEventKey] != nil) {
+            _deferClevertapEventsUntilDataLoaded = [[NSUserDefaults standardUserDefaults] boolForKey:kDeferSendingEventKey];
+        }
+        else{
+            _deferClevertapEventsUntilDataLoaded = YES;
+        }
         _instances = [NSMutableDictionary new];
+        [self fetchDeviceId];
         _plistInfo = [CTPlistInfo sharedInstance];
         pendingNotificationControllers = [NSMutableArray new];
 #if CLEVERTAP_SSL_PINNING
@@ -297,6 +315,55 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         sslCertNames = @[@"DigiCertGlobalRootCA", @"DigiCertSHA2SecureServerCA"];
 #endif
     });
+}
+
++ (void)setAdvertisementId:(ASIdentifierManager *)manager {
+    _trackingEnabled = YES;
+    _deviceId = manager.advertisingIdentifier.UUIDString;
+}
+
++(void) fetchDeviceId{
+    ASIdentifierManager *manager = [ASIdentifierManager sharedManager];
+    if (@available(iOS 14, *)) {
+        if (ATTrackingManager.trackingAuthorizationStatus == ATTrackingManagerAuthorizationStatusAuthorized) {
+            [self setAdvertisementId:manager];
+        } else{
+            [ATTrackingManager requestTrackingAuthorizationWithCompletionHandler:^(ATTrackingManagerAuthorizationStatus status) {
+                if(status == ATTrackingManagerAuthorizationStatusAuthorized){
+                    [self setAdvertisementId:manager];
+                }
+                else{
+                    [self fallbackDeviceId];
+                }
+            }];
+        }
+    } else {
+        if (manager.isAdvertisingTrackingEnabled) {
+            [self setAdvertisementId:manager];
+        } else {
+            [self fallbackDeviceId];
+        }
+    }
+}
+
++(void) fallbackDeviceId{
+    if (_fallbackDeviceId == nil) {
+        NSString *storedFallbackDeviceId = [[NSUserDefaults standardUserDefaults] stringForKey:@"fallbackDeviceId"];
+        if(storedFallbackDeviceId != nil){
+            _fallbackDeviceId = storedFallbackDeviceId;
+        }
+        else{
+            _fallbackDeviceId = [NSUUID UUID].UUIDString;
+            [[NSUserDefaults standardUserDefaults] setObject:_fallbackDeviceId forKey:@"fallbackDeviceId"];
+        }
+    }
+    _trackingEnabled = NO;
+    _deviceId = _fallbackDeviceId;
+}
+
+- (void)setCommonEventData:(NSDictionary<NSString*,id>*)data{
+    _commonEventData = data;
+    [[NSUserDefaults standardUserDefaults] setObject:data forKey:@"commonEventData"];
 }
 
 + (void)onDidFinishLaunchingNotification:(NSNotification *)notification {
@@ -632,7 +699,9 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         if (_deviceInfo.timeZone&& ![_deviceInfo.timeZone isEqualToString:@""]) {
             initialProfileValues[CLTAP_SYS_TZ] = _deviceInfo.timeZone;
         }
-        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues];
+        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues completionHandler:^{
+            //TODO:Debo handle it here
+        }];
         
         _serialQueue = dispatch_queue_create([_config.queueLabel UTF8String], DISPATCH_QUEUE_SERIAL);
         dispatch_queue_set_specific(_serialQueue, kQueueKey, (__bridge void *)self, NULL);
@@ -914,8 +983,12 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 - (void)doHandshakeAsync {
     [self runSerialAsync:^{
         if (![self needHandshake]) return;
-        CleverTapLogInternal(self.config.logLevel, @"%@: starting handshake with %@", self, kHANDSHAKE_URL);
-        NSMutableURLRequest *request = [self createURLRequestFromURL:[[NSURL alloc] initWithString:kHANDSHAKE_URL]];
+        NSString *handshakeURL = kHANDSHAKE_URL;
+        if(_plistInfo.eventPortalDomain != nil){
+            handshakeURL = [[NSString alloc] initWithFormat:kHANDSHAKE_EVENT_PORTAL_URL,_plistInfo.eventPortalDomain];
+        }
+        CleverTapLogInternal(self.config.logLevel, @"%@: starting handshake with %@", self, handshakeURL);
+        NSMutableURLRequest *request = [self createURLRequestFromURL:[[NSURL alloc] initWithString:handshakeURL]];
         request.HTTPMethod = @"GET";
         // Need to simulate a synchronous request
         dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
@@ -1032,13 +1105,13 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
     if (!self.redirectDomain) return nil;
     NSString *accountId = self.config.accountId;
     NSString *sdkRevision = self.deviceInfo.sdkVersion;
-    NSString *endpointDomain;
+    NSString *redirectDomain;
     if (queue == _notificationsQueue) {
-        endpointDomain = self.redirectNotifViewedDomain;
+        redirectDomain = self.redirectNotifViewedDomain;
     } else {
-        endpointDomain = self.redirectDomain;
+        redirectDomain = self.redirectDomain;
     }
-    NSString *endpointUrl = [[NSString alloc] initWithFormat:@"https://%@/a1?os=iOS&t=%@&z=%@", endpointDomain, sdkRevision, accountId];
+    NSString *endpointUrl = [[NSString alloc] initWithFormat:@"https://%@?rt=%@/a1&os=iOS&t=%@&z=%@", _plistInfo.eventPortalDomain, redirectDomain, sdkRevision, accountId];
     currentRequestTimestamp = (int) [[[NSDate alloc] init] timeIntervalSince1970];
     endpointUrl = [endpointUrl stringByAppendingFormat:@"&ts=%d", currentRequestTimestamp];
     return endpointUrl;
@@ -2487,10 +2560,27 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         return;
     }
     
+    BOOL shouldDeferProcessingEvent = NO;
+    if([self shouldDeferProcessingEvent:event withType:type]){
+        shouldDeferProcessingEvent = TRUE;
+        CleverTapLogDebug(self.config.logLevel, @"%@: App Launched not yet processed re-queueing: %@, %lu", self, event, (long)type);
+    }
+    else{
+        if (_deferClevertapEventsUntilDataLoaded) {
+            if(!self.localDataStore.isProfileDataLoaded){
+                shouldDeferProcessingEvent = TRUE;
+                CleverTapLogDebug(self.config.logLevel, @"%@: Profile Data not yet loaded re-queueing: %@, %lu", self, event, (long)type);
+            }
+            else if(_deviceId == nil){
+                shouldDeferProcessingEvent = TRUE;
+                CleverTapLogDebug(self.config.logLevel, @"%@: DeviceId not yet identified re-queueing: %@, %lu", self, event, (long)type);
+            }
+        }
+    }
+    
     // make sure App Launched is processed first
     // if not defer this one; push back on the queue
-    if ([self shouldDeferProcessingEvent:event withType:type]) {
-        CleverTapLogDebug(self.config.logLevel, @"%@: App Launched not yet processed re-queueing: %@, %lu", self, event, (long)type);
+    if (shouldDeferProcessingEvent) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             [self runSerialAsync:^{
                 [self queueEvent:event withType:type];
@@ -2511,6 +2601,25 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
             [self processEvent:event withType:type];
         }];
     }
+}
+
+-(void) addAdditionalEventData:(NSMutableDictionary*) mutableEvent {
+    NSMutableDictionary *mutableEvtData = [NSMutableDictionary dictionaryWithDictionary:mutableEvent[@"evtData"]];
+    id userId = [self.localDataStore getProfileFieldForKey:@"userId"];
+    if(userId != nil){
+        mutableEvtData[@"userId"] = userId;
+    }
+    NSString* userType = [self.localDataStore getProfileFieldForKey:@"userType"];
+    if(userType == nil){
+        userType = _plistInfo.userType;
+    }
+    mutableEvtData[@"userType"] = userType;
+    mutableEvtData[@"deviceId"] = _deviceId;
+    mutableEvtData[@"trackingEnabled"] = [NSNumber numberWithBool:_trackingEnabled];
+    if(_commonEventData != nil){
+        [mutableEvtData addEntriesFromDictionary:_commonEventData];
+    }
+    mutableEvent[@"evtData"] = mutableEvtData;
 }
 
 - (void)processEvent:(NSDictionary *)event withType:(CleverTapEventType)eventType {
@@ -2552,12 +2661,15 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
             if (bundleIdentifier) {
                 mutableEvent[@"pai"] = bundleIdentifier;
             }
+            [self addAdditionalEventData:mutableEvent];
+            
         } else {
             type = @"event";
             NSString *bundleIdentifier = _deviceInfo.bundleId;
             if (bundleIdentifier) {
                 mutableEvent[@"pai"] = bundleIdentifier;
             }
+            [self addAdditionalEventData:mutableEvent];
         }
         mutableEvent[@"type"] = type;
         mutableEvent[@"ep"] = @((int) [[NSDate date] timeIntervalSince1970]);
@@ -3288,6 +3400,61 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
         [self pushDeviceTokenWithAction:CleverTapPushTokenRegister];
         [self notifyUserProfileInitialized];
     }];
+}
+
+-(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error{
+    
+    [self runSerialAsync:^{
+        
+        // set OptOut to false for the old user
+        self.currentUserOptedOut = NO;
+        
+        // unregister the push token on the current user
+        [self pushDeviceTokenWithAction:CleverTapPushTokenUnregister];
+        
+        // clear any events in the queue
+        [self clearQueue];
+        
+        // clear ARP and other context for the old user
+        [self clearUserContext];
+        
+        // clear old profile data
+        [self.localDataStore changeUser];
+        
+        [self resetSession];
+        
+    
+        [self recordDeviceErrors];
+        
+#if !CLEVERTAP_NO_INAPP_SUPPORT
+        if (![[self class] runningInsideAppExtension]) {
+            [self.inAppFCManager changeUserWithGuid: self.deviceInfo.deviceId];
+        }
+#endif
+        
+        [self _setCurrentUserOptOutStateFromStorage];  // be sure to do this AFTER updating the GUID
+        
+#if !CLEVERTAP_NO_INBOX_SUPPORT
+        [self _resetInbox];
+#endif
+        
+#if !CLEVERTAP_NO_DISPLAY_UNIT_SUPPORT
+        [self _resetDisplayUnit];
+#endif
+        
+        [self _resetFeatureFlags];
+        
+        [self _resetProductConfig];
+    
+        
+        [self pushDeviceTokenWithAction:CleverTapPushTokenRegister];
+        [self notifyUserProfileInitialized];
+        
+        if(onSuccess != nil){
+            onSuccess();
+        }
+    }];
+    
 }
 
 - (void)_pushBaseProfile {
@@ -4810,5 +4977,9 @@ static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControl
 #endif
 }
 
+-(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value{
+    _deferClevertapEventsUntilDataLoaded = value;
+    [[NSUserDefaults standardUserDefaults] setBool:value forKey:kDeferSendingEventKey];
+}
 
 @end

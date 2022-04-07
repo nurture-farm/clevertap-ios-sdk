@@ -156,6 +156,8 @@
 		07D8C08B21DDEC54006F5A1B /* CTCarouselImageView.h in Headers */ = {isa = PBXBuildFile; fileRef = 07D8C08A21DDEC54006F5A1B /* CTCarouselImageView.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07FD65A2223BC26300A845B7 /* CTCoverViewController~iphoneland.xib in Resources */ = {isa = PBXBuildFile; fileRef = 07FD65A1223BC26300A845B7 /* CTCoverViewController~iphoneland.xib */; };
 		07FD65A4223BCB8200A845B7 /* CTCoverViewController~ipadland.xib in Resources */ = {isa = PBXBuildFile; fileRef = 07FD65A3223BCB8200A845B7 /* CTCoverViewController~ipadland.xib */; };
+		0B81B06227FAEA470036BB5F /* AdSupport.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B81B06127FAEA470036BB5F /* AdSupport.framework */; };
+		0B81B06427FAECBE0036BB5F /* AppTrackingTransparency.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B81B06327FAECBE0036BB5F /* AppTrackingTransparency.framework */; };
 		4987C665251B5E79003E6BE8 /* CTImageInAppViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 4987C663251B5E79003E6BE8 /* CTImageInAppViewController.h */; };
 		4987C666251B5E79003E6BE8 /* CTImageInAppViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4987C664251B5E79003E6BE8 /* CTImageInAppViewController.m */; };
 		4987C668251B5F9E003E6BE8 /* CTImageInAppViewControllerPrivate.h in Headers */ = {isa = PBXBuildFile; fileRef = 4987C667251B5F9E003E6BE8 /* CTImageInAppViewControllerPrivate.h */; };
@@ -547,6 +549,8 @@
 		07D8C08A21DDEC54006F5A1B /* CTCarouselImageView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CTCarouselImageView.h; sourceTree = "<group>"; };
 		07FD65A1223BC26300A845B7 /* CTCoverViewController~iphoneland.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = "CTCoverViewController~iphoneland.xib"; sourceTree = "<group>"; };
 		07FD65A3223BCB8200A845B7 /* CTCoverViewController~ipadland.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = "CTCoverViewController~ipadland.xib"; sourceTree = "<group>"; };
+		0B81B06127FAEA470036BB5F /* AdSupport.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AdSupport.framework; path = System/Library/Frameworks/AdSupport.framework; sourceTree = SDKROOT; };
+		0B81B06327FAECBE0036BB5F /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
 		203C2B553FF6FBADEE051C68 /* Pods-shared-CleverTapSDKTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-shared-CleverTapSDKTests.release.xcconfig"; path = "Target Support Files/Pods-shared-CleverTapSDKTests/Pods-shared-CleverTapSDKTests.release.xcconfig"; sourceTree = "<group>"; };
 		2108AFE9090417CC69A0E3EB /* libPods-shared-CleverTapSDKTestsApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-shared-CleverTapSDKTestsApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		37D3A7E5589257CFA37243C3 /* libPods-shared-CleverTapSDKUITests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-shared-CleverTapSDKUITests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -718,7 +722,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0B81B06427FAECBE0036BB5F /* AppTrackingTransparency.framework in Frameworks */,
 				D0CB456522EA550C000762B2 /* libicucore.tbd in Frameworks */,
+				0B81B06227FAEA470036BB5F /* AdSupport.framework in Frameworks */,
 				0781852B229FBD5100A72B07 /* SDWebImage.framework in Frameworks */,
 				07B94553219EA44100D4C542 /* libsqlite3.tbd in Frameworks */,
 			);
@@ -880,6 +886,8 @@
 		07B94551219EA44100D4C542 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0B81B06327FAECBE0036BB5F /* AppTrackingTransparency.framework */,
+				0B81B06127FAEA470036BB5F /* AdSupport.framework */,
 				D0B044C927699191000ED628 /* CleverTapSDK.framework */,
 				D0CB456422EA550C000762B2 /* libicucore.tbd */,
 				D09A5E0221EA33C50032DDDF /* SDWebImage.framework */,

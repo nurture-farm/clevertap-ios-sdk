@@ -5,7 +5,9 @@
 
 @interface CTLocalDataStore : NSObject
 
-- (instancetype)initWithConfig:(CleverTapInstanceConfig *)config andProfileValues:(NSDictionary*)profileValues;
+@property (nonatomic) BOOL isProfileDataLoaded;
+
+- (instancetype)initWithConfig:(CleverTapInstanceConfig *)config andProfileValues:(NSDictionary*)profileValues completionHandler:(void(^ _Nonnull )(void))completion;
 
 - (void)persistEvent:(NSDictionary *)event;
 
