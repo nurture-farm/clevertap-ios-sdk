@@ -1241,6 +1241,8 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
  */
 -(void)setCommonEventData:(NSDictionary<NSString*,id>*_Nonnull)data;
 
+-(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value;
+
 @end
 
 #pragma clang diagnostic pop

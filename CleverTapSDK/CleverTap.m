@@ -119,6 +119,8 @@ NSString *const CleverTapGeofencesDidUpdateNotification = CLTAP_GEOFENCES_DID_UP
 NSString *const kOnUserLoginAction = @"onUserLogin";
 NSString *const kInstanceWithCleverTapIDAction = @"instanceWithCleverTapID";
 
+NSString *const kDeferSendingEventKey = @"deferSendingEventKey";
+
 static int currentRequestTimestamp = 0;
 static int initialAppEnteredForegroundTime = 0;
 static BOOL isAutoIntegrated;
@@ -283,6 +285,7 @@ static CLLocationCoordinate2D emptyLocation = {-1000.0, -1000.0}; // custom empt
 static CTInAppDisplayViewController *currentDisplayController;
 static NSMutableArray<CTInAppDisplayViewController*> *pendingNotificationControllers;
 static NSDictionary<NSString*,id>* _commonEventData;
+static BOOL _deferClevertapEventsUntilDataLoaded = YES;
 static NSString* _deviceId;
 static NSString* _fallbackDeviceId;
 static bool _trackingEnabled;
@@ -297,6 +300,9 @@ static bool _trackingEnabled;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
+        if ([[NSUserDefaults standardUserDefaults] objectForKey:kDeferSendingEventKey] != nil) {
+            _deferClevertapEventsUntilDataLoaded = [[NSUserDefaults standardUserDefaults] boolForKey:kDeferSendingEventKey];
+        }
         _instances = [NSMutableDictionary new];
         [self fetchDeviceId];
         _plistInfo = [CTPlistInfo sharedInstance];
@@ -2556,13 +2562,17 @@ static bool _trackingEnabled;
         shouldDeferProcessingEvent = TRUE;
         CleverTapLogDebug(self.config.logLevel, @"%@: App Launched not yet processed re-queueing: %@, %lu", self, event, (long)type);
     }
-    else if(!self.localDataStore.isProfileDataLoaded){
-        shouldDeferProcessingEvent = TRUE;
-        CleverTapLogDebug(self.config.logLevel, @"%@: Profile Data not yet loaded re-queueing: %@, %lu", self, event, (long)type);
-    }
-    else if(_deviceId == nil){
-        shouldDeferProcessingEvent = TRUE;
-        CleverTapLogDebug(self.config.logLevel, @"%@: DeviceId not yet identified re-queueing: %@, %lu", self, event, (long)type);
+    else{
+        if (_deferClevertapEventsUntilDataLoaded) {
+            if(!self.localDataStore.isProfileDataLoaded){
+                shouldDeferProcessingEvent = TRUE;
+                CleverTapLogDebug(self.config.logLevel, @"%@: Profile Data not yet loaded re-queueing: %@, %lu", self, event, (long)type);
+            }
+            else if(_deviceId == nil){
+                shouldDeferProcessingEvent = TRUE;
+                CleverTapLogDebug(self.config.logLevel, @"%@: DeviceId not yet identified re-queueing: %@, %lu", self, event, (long)type);
+            }
+        }
     }
     
     // make sure App Launched is processed first
@@ -4962,6 +4972,11 @@ static bool _trackingEnabled;
         }];
     }];
 #endif
+}
+
+-(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value{
+    _deferClevertapEventsUntilDataLoaded = value;
+    [[NSUserDefaults standardUserDefaults] setBool:value forKey:kDeferSendingEventKey]
 }
 
 @end
