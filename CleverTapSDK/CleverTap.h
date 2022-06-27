@@ -1243,6 +1243,10 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 
 -(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value;
 
+-(void)setTrackingDeviceId:(NSString* _Nonnull)trackingDeviceId;
+
+-(void)setTrackingEnabled:(BOOL)trackingEnabled;
+
 @end
 
 #pragma clang diagnostic pop
