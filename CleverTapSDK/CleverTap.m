@@ -308,7 +308,7 @@ static bool _trackingEnabled;
         }
         _instances = [NSMutableDictionary new];
         _plistInfo = [CTPlistInfo sharedInstance];
-        if (!_plistInfo.useCustomCleverTapId) {
+        if (!_plistInfo.useCustomDeviceId) {
             [self fetchDeviceId];
         }
         pendingNotificationControllers = [NSMutableArray new];
