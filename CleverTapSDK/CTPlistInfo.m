@@ -92,6 +92,9 @@ static NSArray *registeredURLSchemes;
         // Fetch IDFV Flag from INFO.PLIST
         NSString *disableIDFV = [CTPlistInfo getMetaDataForAttribute:CLTAP_DISABLE_IDFV_LABEL];
         _disableIDFV = (disableIDFV && [disableIDFV isEqualToString:@"1"]);
+        
+        NSString *useCustomDeviceId = [CTPlistInfo getMetaDataForAttribute:CTAP_USE_CUSTOM_DEVICE_ID];
+        _useCustomDeviceId = (useCustomDeviceId && [useCustomDeviceId isEqualToString:@"1"]);
     }
     return self;
 }

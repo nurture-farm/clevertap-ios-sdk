@@ -307,8 +307,10 @@ static bool _trackingEnabled;
             _deferClevertapEventsUntilDataLoaded = YES;
         }
         _instances = [NSMutableDictionary new];
-        [self fetchDeviceId];
         _plistInfo = [CTPlistInfo sharedInstance];
+        if (!_plistInfo.useCustomDeviceId) {
+            [self fetchDeviceId];
+        }
         pendingNotificationControllers = [NSMutableArray new];
 #if CLEVERTAP_SSL_PINNING
         // Only pin anchor/CA certificates
@@ -4980,6 +4982,14 @@ static bool _trackingEnabled;
 -(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value{
     _deferClevertapEventsUntilDataLoaded = value;
     [[NSUserDefaults standardUserDefaults] setBool:value forKey:kDeferSendingEventKey];
+}
+
+-(void)setTrackingDeviceId:(NSString*)trackingDeviceId {
+    _deviceId = trackingDeviceId;
+}
+
+-(void)setTrackingEnabled:(BOOL)trackingEnabled {
+    _trackingEnabled = trackingEnabled;
 }
 
 @end
