@@ -719,7 +719,7 @@ static bool _trackingEnabled;
         if (_deviceInfo.timeZone&& ![_deviceInfo.timeZone isEqualToString:@""]) {
             initialProfileValues[CLTAP_SYS_TZ] = _deviceInfo.timeZone;
         }
-        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues andDeviceInfo: _deviceInfo completionHandler:^{
+        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config profileValues:initialProfileValues andDeviceInfo: _deviceInfo completionHandler:^{
             //TODO:Debo handle it here
         }];
         
