@@ -1,6 +1,76 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+### [Version 4.2.0](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.2.0) (December 13, 2022)
+
+#### Added
+- Adds a new `CTLocalInApp` builder class to create half-interstitial & alert local in-apps.
+- Adds below new public APIs for supporting push notification runtime permission.
+    - `promptPushPrimer`, `promptForPushPermission`, and `getNotificationPermissionStatusWithCompletionHandler`
+- Adds push permission callback method `onPushPermissionResponse` which returns true/false after user allow/deny notification permission.
+- Refer [Push Primer doc](/docs/PushPrimer.md) for more details.
+- Updated `SDWebImage` dependency.
+
+### [Version 4.1.6](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.6) (November 28, 2022)
+
+#### Added
+- Adds a public instance method `deleteInboxMessagesforID` for deleting multiple App Inbox messages by passing a collection of `messageID`s.
+
+#### Fixed
+- Fixes a bug where embedded videos were not rendering in html inapp messages.
+- Fixes a bug where incorrect events were being fired for Signed Call iOS SDK.
+
+### [Version 4.1.5](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.5) (November 15, 2022)
+
+#### Added
+- Adds a class method `getGlobalInstance` to retrieve a CleverTap SDK instance for an account ID.
+
+### [Version 4.1.4](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.4) (October 24, 2022)
+
+#### Changed
+- Allows additional special characters when setting a custom CleverTap ID.
+
+### [Version 4.1.3](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.3) (October 11, 2022)
+
+##### Fixed
+- Fixes the value of `wzrk_c2a` key for image-only in-app notification CTAs.
+- Possible fix for crashes related to profile caches.
+- Updates support for CleverTap Signed Call iOS SDK.
+
+### [Version 4.1.2](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.2) (September 16, 2022)
+
+##### Fixed
+- Fixes possible App Inbox crashes.
+- Fixes NSKeyedUnarchiver console warnings
+
+### [Version 4.1.1](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.1) (July 06, 2022)
+  
+##### Added
+- Adds support to call `onUserLogin`, `profileIncrementValueBy`, `profileDecrementValueBy` methods in a WebView.
+- Updates certificates for SSL Pinning.
+
+##### Fixed
+- Fixes possible App Inbox crashes.
+
+### [Version 4.1.0](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.1.0) (June 16, 2022)
+  
+##### Added
+- Adds analytics support for upcoming CleverTap Signed Call iOS SDK.
+- `CleverTap.sharedInstance()?.profileRemoveValue(forKey: )` can now remove PII data like Email, Phone and Date Of Birth.
+
+##### Fixed
+- Fixes possible crashes by applying locks to make shared instance thread safe.
+- Mitigates FileManager deprecated APIs.
+- Mitigates UIKit deprecated APIs.
+
+
+### [Version 4.0.1](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.0.1) (April 12, 2022)
+  
+##### Fixed
+- Fixes deviceID so that it will be fetched from storage instead of memory variables.
+- Fixes compile time errors when building sdk with CLEVERTAP_NO_INBOX_SUPPORT.
+- Adds a check for uname() method when fetching platform name to avoid possible runtime crashes.
+
 ### [Version 4.0.0](https://github.com/CleverTap/clevertap-ios-sdk/releases/tag/4.0.0) (February 7, 2022)
   
 ##### Added

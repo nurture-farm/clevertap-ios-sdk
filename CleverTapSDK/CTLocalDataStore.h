@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "CTDeviceInfo.h"
 
 @class CleverTapInstanceConfig;
 @class CleverTapEventDetail;
@@ -7,7 +8,7 @@
 
 @property (nonatomic) BOOL isProfileDataLoaded;
 
-- (instancetype)initWithConfig:(CleverTapInstanceConfig *)config andProfileValues:(NSDictionary*)profileValues completionHandler:(void(^ _Nonnull )(void))completion;
+- (instancetype)initWithConfig:(CleverTapInstanceConfig *)config profileValues:(NSDictionary*)profileValues andDeviceInfo:(CTDeviceInfo*)deviceInfo completionHandler:(void(^ _Nonnull )(void))completion;
 
 - (void)persistEvent:(NSDictionary *)event;
 

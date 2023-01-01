@@ -42,6 +42,8 @@
 #import "CTInterstitialImageViewController.h"
 #import "CTHalfInterstitialImageViewController.h"
 #import "CleverTap+InAppNotifications.h"
+#import "CTLocalInApp.h"
+#import "CleverTap+PushPermission.h"
 #endif
 
 #import "CTLocationManager.h"
@@ -70,6 +72,7 @@ static NSArray *sslCertNames;
 #import "CleverTapProductConfigPrivate.h"
 #import "CTProductConfigController.h"
 
+#import "CleverTap+SCDomain.h"
 #import <objc/runtime.h>
 
 #import <AdSupport/ASIdentifierManager.h>
@@ -78,6 +81,7 @@ static NSArray *sslCertNames;
 static const void *const kQueueKey = &kQueueKey;
 static const void *const kNotificationQueueKey = &kNotificationQueueKey;
 
+static NSRecursiveLock *instanceLock;
 static const int kMaxBatchSize = 49;
 NSString *const kQUEUE_NAME_PROFILE = @"net_queue_profile";
 NSString *const kQUEUE_NAME_EVENTS = @"events";
@@ -240,6 +244,10 @@ typedef NS_ENUM(NSInteger, CleverTapInAppRenderingStatus) {
 @property (atomic, weak) id <CleverTapURLDelegate> urlDelegate;
 @property (atomic, weak) id <CleverTapPushNotificationDelegate> pushNotificationDelegate;
 @property (atomic, weak) id <CleverTapInAppNotificationDelegate> inAppNotificationDelegate;
+@property (atomic, weak) id <CleverTapDomainDelegate> domainDelegate;
+#if !CLEVERTAP_NO_INAPP_SUPPORT
+@property (atomic, weak) id <CleverTapPushPermissionDelegate> pushPermissionDelegate;
+#endif
 
 @property (atomic, strong) NSString *processingLoginUserIdentifier;
 
@@ -267,6 +275,7 @@ typedef NS_ENUM(NSInteger, CleverTapInAppRenderingStatus) {
 @synthesize offline=_offline;
 @synthesize firstRequestInSession=_firstRequestInSession;
 @synthesize geofenceLocation=_geofenceLocation;
+@synthesize domainDelegate=_domainDelegate;
 
 #if !CLEVERTAP_NO_DISPLAY_UNIT_SUPPORT
 @synthesize displayUnitDelegate=_displayUnitDelegate;
@@ -274,6 +283,9 @@ typedef NS_ENUM(NSInteger, CleverTapInAppRenderingStatus) {
 
 @synthesize featureFlagsDelegate=_featureFlagsDelegate;
 @synthesize productConfigDelegate=_productConfigDelegate;
+#if !CLEVERTAP_NO_INAPP_SUPPORT
+@synthesize pushPermissionDelegate=_pushPermissionDelegate;
+#endif
 
 static CTPlistInfo *_plistInfo;
 static NSMutableDictionary<NSString*, CleverTap*> *_instances;
@@ -299,6 +311,7 @@ static bool _trackingEnabled;
 + (void)initialize {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        instanceLock = [NSRecursiveLock new];
         _commonEventData = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"commonEventData"];
         if ([[NSUserDefaults standardUserDefaults] objectForKey:kDeferSendingEventKey] != nil) {
             _deferClevertapEventsUntilDataLoaded = [[NSUserDefaults standardUserDefaults] boolForKey:kDeferSendingEventKey];
@@ -314,7 +327,7 @@ static bool _trackingEnabled;
         pendingNotificationControllers = [NSMutableArray new];
 #if CLEVERTAP_SSL_PINNING
         // Only pin anchor/CA certificates
-        sslCertNames = @[@"DigiCertGlobalRootCA", @"DigiCertSHA2SecureServerCA"];
+        sslCertNames = @[@"AmazonRootCA1"];
 #endif
     });
 }
@@ -624,6 +637,8 @@ static bool _trackingEnabled;
 }
 
 + (nullable instancetype)_sharedInstanceWithCleverTapID:(NSString *)cleverTapID {
+    @try {
+        [instanceLock lock];
     if (_defaultInstanceConfig == nil) {
         if (!_plistInfo.accountId || !_plistInfo.accountToken) {
             if (!sharedInstanceErrorLogged) {
@@ -652,6 +667,9 @@ static bool _trackingEnabled;
         CleverTapLogStaticInfo(@"Initializing default CleverTap SDK instance. %@: %@ %@: %@ %@: %@ %@: %@ %@: %@", CLTAP_ACCOUNT_ID_LABEL, _plistInfo.accountId, CLTAP_TOKEN_LABEL, _plistInfo.accountToken, CLTAP_REGION_LABEL, regionLog, CLTAP_PROXY_DOMAIN_LABEL, proxyDomainLog, CLTAP_SPIKY_PROXY_DOMAIN_LABEL, spikyProxyDomainLog);
     }
     return [self _instanceWithConfig:_defaultInstanceConfig andCleverTapID:cleverTapID];
+    } @finally {
+        [instanceLock unlock];
+    }
 }
 
 + (instancetype)instanceWithConfig:(CleverTapInstanceConfig*)config {
@@ -667,7 +685,7 @@ static bool _trackingEnabled;
         _instances = [[NSMutableDictionary alloc] init];
     }
     __block CleverTap *instance = [_instances objectForKey:config.accountId];
-    if (instance == nil) {
+    if (instance == nil || instance.deviceInfo.deviceId == nil) {
         if (config.accountId) {
             instance = [[self alloc] initWithConfig:config andCleverTapID:cleverTapID];
             _instances[config.accountId] = instance;
@@ -701,7 +719,7 @@ static bool _trackingEnabled;
         if (_deviceInfo.timeZone&& ![_deviceInfo.timeZone isEqualToString:@""]) {
             initialProfileValues[CLTAP_SYS_TZ] = _deviceInfo.timeZone;
         }
-        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues completionHandler:^{
+        _localDataStore = [[CTLocalDataStore alloc] initWithConfig:_config andProfileValues:initialProfileValues andDeviceInfo: _deviceInfo completionHandler:^{
             //TODO:Debo handle it here
         }];
         
@@ -712,6 +730,10 @@ static bool _trackingEnabled;
         self.validationResultStack = [[CTValidationResultStack alloc]initWithConfig: _config];
         self.userSetLocation = emptyLocation;
         self.minSessionSeconds =  CLTAP_SESSION_LENGTH_MINS * 60;
+
+        // save config to defaults
+        [CTPreferences archiveObject:config forFileName: [CleverTapInstanceConfig dataArchiveFileNameWithAccountId:config.accountId]];
+
         [self _setDeviceNetworkInfoReportingFromStorage];
         [self _setCurrentUserOptOutStateFromStorage];
         [self initNetworking];
@@ -737,6 +759,16 @@ static bool _trackingEnabled;
     }
     
     return self;
+}
+
++ (CleverTap *)getGlobalInstance:(NSString *)accountId {
+
+    if (!_instances || [_instances count] <= 0) {
+        CleverTapInstanceConfig *config = [CTPreferences unarchiveFromFile: [CleverTapInstanceConfig dataArchiveFileNameWithAccountId:accountId] ofType:[CleverTapInstanceConfig class] removeFile:NO];
+        return [CleverTap instanceWithConfig:config];
+    }
+
+    return _instances[accountId];
 }
 
 // notify application code once we have a device GUID
@@ -789,12 +821,17 @@ static bool _trackingEnabled;
 }
 
 + (void)_setCredentialsWithAccountID:(NSString *)accountID token:(NSString *)token {
+    @try {
+        [instanceLock lock];
     if (_defaultInstanceConfig) {
         CleverTapLogStaticDebug(@"CleverTap SDK already initialized with accountID: %@ and token: %@. Cannot change credentials to %@ : %@", _defaultInstanceConfig.accountId, _defaultInstanceConfig.accountToken, accountID, token);
         return;
     }
     accountID = [accountID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     token = [token stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    } @finally {
+        [instanceLock unlock];
+    }
 }
 
 + (void)runSyncMainQueue:(void (^)(void))block {
@@ -860,6 +897,10 @@ static bool _trackingEnabled;
         NSMutableArray *domains = [NSMutableArray arrayWithObjects:kCTApiDomain, nil];
         if (self.redirectDomain && ![self.redirectDomain isEqualToString:kCTApiDomain]) {
             [domains addObject:self.redirectDomain];
+        }
+        // WITH SSL PINNING ENABLED AND REGION NOT SPECIFIED BY THE USER, WE WILL DEFAULT TO EU1 AND PIN THE CERT TO EU1
+        else if (!self.redirectDomain) {
+            [domains addObject:[NSString stringWithFormat:@"eu1.%@", kCTApiDomain]];
         }
         [self.urlSessionDelegate pinSSLCerts:sslCertNames forDomains:domains];
         self.urlSession = [NSURLSession sessionWithConfiguration:sc delegate:self.urlSessionDelegate delegateQueue:nil];
@@ -978,13 +1019,19 @@ static bool _trackingEnabled;
 }
 
 - (BOOL)needHandshake {
-    if ([self isMuted] || self.explictEndpointDomain) return NO;
+    if ([self isMuted] || self.explictEndpointDomain) {
+        return NO;
+    }
     return self.redirectDomain == nil;
 }
 
 - (void)doHandshakeAsync {
     [self runSerialAsync:^{
-        if (![self needHandshake]) return;
+        if (![self needHandshake]) {
+            //self.redirectDomain contains value
+            [self onDomainAvailable];
+            return;
+        }
         NSString *handshakeURL = kHANDSHAKE_URL;
         if(_plistInfo.eventPortalDomain != nil){
             handshakeURL = [[NSString alloc] initWithFormat:kHANDSHAKE_EVENT_PORTAL_URL,_plistInfo.eventPortalDomain];
@@ -1003,7 +1050,11 @@ static bool _trackingEnabled;
                     [self updateStateFromResponseHeadersShouldRedirect:httpResponse.allHeaderFields];
                     [self updateStateFromResponseHeadersShouldRedirectForNotif:httpResponse.allHeaderFields];
                     [self handleHandshakeSuccess];
+                } else {
+                    [self onDomainUnavailable];
                 }
+            } else {
+                [self onDomainUnavailable];
             }
             dispatch_semaphore_signal(semaphore);
         }];
@@ -1050,6 +1101,8 @@ static bool _trackingEnabled;
                 shouldRedirect = YES;
                 self.redirectDomain = redirectDomain;
                 [self persistRedirectDomain];
+                //domain changed
+                [self onDomainAvailable];
             }
         }
         NSString *mutedString = headers[kMUTE_HEADER];
@@ -1198,7 +1251,8 @@ static bool _trackingEnabled;
 
 - (NSDictionary *)generateAppFields {
     NSMutableDictionary *evtData = [NSMutableDictionary new];
-    
+    evtData[@"scv"] = self.deviceInfo.signedCallSDKVersion;
+
     evtData[@"Version"] = self.deviceInfo.appVersion;
     
     evtData[@"Build"] = self.deviceInfo.appBuild;
@@ -1254,6 +1308,10 @@ static bool _trackingEnabled;
         evtData[@"lib"] = self.deviceInfo.library;
     }
     
+    #if CLEVERTAP_SSL_PINNING
+        evtData[@"sslpin"] = @YES;
+    #endif
+
     NSString *proxyDomain = [self.config.proxyDomain stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (proxyDomain != nil && proxyDomain.length > 0) {
         evtData[@"proxyDomain"] = self.config.proxyDomain;
@@ -1263,7 +1321,9 @@ static bool _trackingEnabled;
     if (spikyProxyDomain != nil && spikyProxyDomain.length > 0) {
         evtData[@"spikyProxyDomain"] = self.config.spikyProxyDomain;
     }
-    
+    // Add Local in-app count to event data.
+    evtData[@"LIAMC"] = @([self.deviceInfo getLocalInAppCount]);
+
     return evtData;
 }
 
@@ -1578,13 +1638,7 @@ static bool _trackingEnabled;
     if (!object) return;
     
 #if !defined(CLEVERTAP_TVOS)
-    // normalize the notification data
-    NSDictionary *notification;
-    if ([object isKindOfClass:[UILocalNotification class]]) {
-        notification = [((UILocalNotification *) object) userInfo];
-    } else if ([object isKindOfClass:[NSDictionary class]]) {
-        notification = object;
-    }
+    NSDictionary *notification = [self getNotificationDictionary:object];
     
     if (!notification || [notification count] <= 0) return;
     
@@ -1665,9 +1719,13 @@ static bool _trackingEnabled;
         }
         if ([self didHandleInAppTestFromPushNotificaton:testPayload]) {
             return YES;
-        } else if ([self didHandleInboxMessageTestFromPushNotificaton:testPayload]) {
+        }
+#if !CLEVERTAP_NO_INBOX_SUPPORT
+        else if ([self didHandleInboxMessageTestFromPushNotificaton:testPayload]) {
             return YES;
-        } else if ([self didHandleDisplayUnitTestFromPushNotificaton:testPayload]) {
+        }
+#endif
+        else if ([self didHandleDisplayUnitTestFromPushNotificaton:testPayload]) {
             return YES;
         } else {
             CleverTapLogDebug(self.config.logLevel, @"%@: unable to handle test payload in the push notification: %@", self, notification);
@@ -1772,6 +1830,26 @@ static bool _trackingEnabled;
     return isOurs;
 }
 
+#if !(TARGET_OS_TV)
+/// Get notification dictionary object from id object to normalize the notification data
+/// @param object notification, data or notification userInfo dictionary
+- (NSDictionary *)getNotificationDictionary:(id)object {
+    NSDictionary *notification;
+
+    if (@available(iOS 10.0, tvOS 10.0, *)) {
+        if ([object isKindOfClass:[UNNotification class]]) {
+            notification = ((UNNotification *) object).request.content.userInfo;
+        } else if ([object isKindOfClass:[NSDictionary class]]) {
+            notification = object;
+        }
+    } else if ([object isKindOfClass:[UILocalNotification class]]) {
+        notification = [((UILocalNotification *) object) userInfo];
+    } else if ([object isKindOfClass:[NSDictionary class]]) {
+        notification = object;
+    }
+    return notification;
+}
+#endif
 
 #pragma mark - InApp Notifications
 
@@ -2054,6 +2132,11 @@ static bool _trackingEnabled;
         CleverTapLogDebug(self.config.logLevel, @"%@: Will show new InApp: %@", self, notification.campaignId);
         controller.delegate = self;
         [[self class] displayInAppDisplayController:controller];
+
+        // Update local in-app count only if it is from local push primer.
+        if (notification.isLocalInApp && !notification.isPushSettingsSoftAlert) {
+            [self.deviceInfo incrementLocalInAppCount];
+        }
     }
     if (errorString) {
         CleverTapLogDebug(self.config.logLevel, @"%@: %@", self, errorString);
@@ -2140,6 +2223,21 @@ static bool _trackingEnabled;
     }
     [controller hide:true];
 }
+
+#if !CLEVERTAP_NO_INAPP_SUPPORT
+- (void)handleInAppPushPrimer:(CTInAppNotification *)notification
+           fromViewController:(CTInAppDisplayViewController *)controller
+       withFallbackToSettings:(BOOL)isFallbackToSettings {
+    CleverTapLogDebug(self.config.logLevel, @"%@: InApp Push Primer Accepted:", self);
+    [self promptForOSPushNotificationWithFallbackToSettings:isFallbackToSettings
+                                       andSkipSettingsAlert:notification.skipSettingsAlert];
+
+}
+
+- (void)inAppPushPrimerDidDismissed {
+    [self notifyPushPermissionResponse:NO];
+}
+#endif
 
 - (void)openURL:(NSURL *)ctaURL forModule:(NSString *)module {
     UIApplication *sharedApplication = [[self class] getSharedApplication];
@@ -2579,7 +2677,7 @@ static bool _trackingEnabled;
             }
         }
     }
-    
+
     // make sure App Launched is processed first
     // if not defer this one; push back on the queue
     if (shouldDeferProcessingEvent) {
@@ -2664,7 +2762,7 @@ static bool _trackingEnabled;
                 mutableEvent[@"pai"] = bundleIdentifier;
             }
             [self addAdditionalEventData:mutableEvent];
-            
+
         } else {
             type = @"event";
             NSString *bundleIdentifier = _deviceInfo.bundleId;
@@ -2777,21 +2875,21 @@ static bool _trackingEnabled;
 }
 
 - (void)inflateEventsQueue {
-    self.eventsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self eventsFileName] removeFile:YES];
+    self.eventsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self eventsFileName] ofType:[NSMutableArray class] removeFile:YES];
     if (!self.eventsQueue || [self isMuted]) {
         self.eventsQueue = [NSMutableArray array];
     }
 }
 
 - (void)inflateProfileQueue {
-    self.profileQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self profileEventsFileName] removeFile:YES];
+    self.profileQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self profileEventsFileName] ofType:[NSMutableArray class] removeFile:YES];
     if (!self.profileQueue || [self isMuted]) {
         self.profileQueue = [NSMutableArray array];
     }
 }
 
 - (void)inflateNotificationsQueue {
-    self.notificationsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self notificationsFileName] removeFile:YES];
+    self.notificationsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self notificationsFileName] ofType:[NSMutableArray class] removeFile:YES];
     if (!self.notificationsQueue || [self isMuted]) {
         self.notificationsQueue = [NSMutableArray array];
     }
@@ -2804,17 +2902,17 @@ static bool _trackingEnabled;
 }
 
 - (void)clearEventsQueue {
-    self.eventsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self eventsFileName] removeFile:YES];
+    self.eventsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self eventsFileName] ofType:[NSMutableArray class] removeFile:YES];
     self.eventsQueue = [NSMutableArray array];
 }
 
 - (void)clearProfileQueue {
-    self.profileQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self profileEventsFileName] removeFile:YES];
+    self.profileQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self profileEventsFileName] ofType:[NSMutableArray class] removeFile:YES];
     self.profileQueue = [NSMutableArray array];
 }
 
 - (void)clearNotificationsQueue {
-    self.notificationsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self notificationsFileName] removeFile:YES];
+    self.notificationsQueue = (NSMutableArray *)[CTPreferences unarchiveFromFile:[self notificationsFileName] ofType:[NSMutableArray class] removeFile:YES];
     self.notificationsQueue = [NSMutableArray array];
 }
 
@@ -3405,58 +3503,58 @@ static bool _trackingEnabled;
 }
 
 -(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error{
-    
+
     [self runSerialAsync:^{
-        
+
         // set OptOut to false for the old user
         self.currentUserOptedOut = NO;
-        
+
         // unregister the push token on the current user
         [self pushDeviceTokenWithAction:CleverTapPushTokenUnregister];
-        
+
         // clear any events in the queue
         [self clearQueue];
-        
+
         // clear ARP and other context for the old user
         [self clearUserContext];
-        
+
         // clear old profile data
         [self.localDataStore changeUser];
-        
+
         [self resetSession];
-        
-    
+
+
         [self recordDeviceErrors];
-        
+
 #if !CLEVERTAP_NO_INAPP_SUPPORT
         if (![[self class] runningInsideAppExtension]) {
             [self.inAppFCManager changeUserWithGuid: self.deviceInfo.deviceId];
         }
 #endif
-        
+
         [self _setCurrentUserOptOutStateFromStorage];  // be sure to do this AFTER updating the GUID
-        
+
 #if !CLEVERTAP_NO_INBOX_SUPPORT
         [self _resetInbox];
 #endif
-        
+
 #if !CLEVERTAP_NO_DISPLAY_UNIT_SUPPORT
         [self _resetDisplayUnit];
 #endif
-        
+
         [self _resetFeatureFlags];
-        
+
         [self _resetProductConfig];
-    
-        
+
+
         [self pushDeviceTokenWithAction:CleverTapPushTokenRegister];
         [self notifyUserProfileInitialized];
-        
+
         if(onSuccess != nil){
             onSuccess();
         }
     }];
-    
+
 }
 
 - (void)_pushBaseProfile {
@@ -3634,6 +3732,10 @@ static bool _trackingEnabled;
 
 - (NSString *)profileGetCleverTapID {
     return self.deviceInfo.deviceId;
+}
+
+- (NSString *)getAccountID {
+    return self.config.accountId;
 }
 
 - (NSString *)profileGetCleverTapAttributionIdentifier {
@@ -3866,12 +3968,7 @@ static bool _trackingEnabled;
 
 - (void)_recordPushNotificationEvent:(BOOL)clicked forNotification:(id)notificationData {
 #if !defined(CLEVERTAP_TVOS)
-    NSDictionary *notification;
-    if ([notificationData isKindOfClass:[UILocalNotification class]]) {
-        notification = [((UILocalNotification *) notificationData) userInfo];
-    } else if ([notificationData isKindOfClass:[NSDictionary class]]) {
-        notification = notificationData;
-    }
+    NSDictionary *notification = [self getNotificationDictionary:notificationData];
     if (notification) {
         [self runSerialAsync:^{
             [CTEventBuilder buildPushNotificationEvent:clicked forNotification:notification completionHandler:^(NSDictionary *event, NSArray<CTValidationResult*>*errors) {
@@ -4412,6 +4509,13 @@ static bool _trackingEnabled;
     [self.inboxController deleteMessageWithId:messageId];
 }
 
+- (void)deleteInboxMessagesForIDs:(NSArray<NSString *> *_Nonnull)messageIds {
+    if (![self _isInboxInitialized]) {
+        return;
+    }
+    [self.inboxController deleteMessagesWithId:messageIds];
+}
+
 - (void)markReadInboxMessageForID:(NSString *)messageId{
     if (![self _isInboxInitialized]) {
         return;
@@ -4521,6 +4625,12 @@ static bool _trackingEnabled;
         }];
 #endif
     }
+}
+
+- (void)messageDidSelectForPushPermission:(BOOL)fallbackToSettings {
+    CleverTapLogDebug(self.config.logLevel, @"%@: App Inbox Campaign Push Primer Accepted:", self);
+    [self promptForOSPushNotificationWithFallbackToSettings:fallbackToSettings
+                                       andSkipSettingsAlert:NO];
 }
 
 - (void)recordInboxMessageStateEvent:(BOOL)clicked
@@ -4979,6 +5089,214 @@ static bool _trackingEnabled;
 #endif
 }
 
+#pragma mark - Signed Call Public APIs
+
+- (void)recordSignedCallEvent:(int)eventRawValue forCallDetails:(NSDictionary *)calldetails {
+#if !defined(CLEVERTAP_TVOS)
+    [self runSerialAsync:^{
+        [CTEventBuilder buildSignedCallEvent: eventRawValue forCallDetails:calldetails completionHandler:^(NSDictionary * _Nullable event, NSArray<CTValidationResult *> * _Nullable errors) {
+            if (event) {
+                [self queueEvent:event withType:CleverTapEventTypeRaised];
+            };
+            if (errors) {
+                [self.validationResultStack pushValidationResults:errors];
+            }
+        }];
+    }];
+#endif
+}
+
+- (void)setSignedCallVersion:(NSString *)version {
+    [self.deviceInfo setSignedCallSDKVersion: version];
+}
+
+- (void)setDomainDelegate:(id<CleverTapDomainDelegate>)delegate {
+    if ([[self class] runningInsideAppExtension]){
+        CleverTapLogDebug(self.config.logLevel, @"%@: setDomainDelegate is a no-op in an app extension.", self);
+        return;
+    }
+    if (delegate && [delegate conformsToProtocol:@protocol(CleverTapDomainDelegate)]) {
+        _domainDelegate = delegate;
+    } else {
+        CleverTapLogDebug(self.config.logLevel, @"%@: CleverTap Domain Delegate does not conform to the CleverTapDomainDelegate protocol", self);
+    }
+}
+
+- (void)onDomainAvailable {
+    NSString *dcDomain = [self getDomainString];
+    if (self.domainDelegate && [self.domainDelegate respondsToSelector:@selector(onSCDomainAvailable:)]) {
+        [self.domainDelegate onSCDomainAvailable: dcDomain];
+    } else if (dcDomain == nil) {
+        [self onDomainUnavailable];
+    }
+}
+
+- (void)onDomainUnavailable {
+    if (self.domainDelegate && [self.domainDelegate respondsToSelector:@selector(onSCDomainUnavailable)]) {
+        [self.domainDelegate onSCDomainUnavailable];
+    }
+}
+
+//Updates the format of the domain - from `in1.clevertap-prod.com` to region.auth.domain (i.e. in1.auth.clevertap-prod.com)
+- (NSString *)getDomainString {
+    if (self.redirectDomain != nil) {
+        NSArray *listItems = [self.redirectDomain componentsSeparatedByString:@"."];
+        NSString *domainItem = [listItems[0] stringByAppendingString:@".auth"];
+        for (int i = 1; i < listItems.count; i++ ) {
+            NSString *dotString = [@"." stringByAppendingString: listItems[i]];
+            domainItem = [domainItem stringByAppendingString: dotString];
+        }
+        self.signedCallDomain = domainItem;
+        return domainItem;
+    } else {
+        return nil;
+    }
+}
+
+#pragma mark - Push Permission
+
+#if !CLEVERTAP_NO_INAPP_SUPPORT
+
+- (void)setPushPermissionDelegate:(id<CleverTapPushPermissionDelegate>)delegate {
+    if ([[self class] runningInsideAppExtension]){
+        CleverTapLogDebug(self.config.logLevel, @"%@: setPushPermissionDelegate is a no-op in an app extension.", self);
+        return;
+    }
+    if (delegate && [delegate conformsToProtocol:@protocol(CleverTapPushPermissionDelegate)]) {
+        _pushPermissionDelegate = delegate;
+    } else {
+        CleverTapLogDebug(self.config.logLevel, @"%@: CleverTap Push Permission Delegate does not conform to the CleverTapPushPermissionDelegate protocol", self);
+    }
+}
+
+- (id<CleverTapPushPermissionDelegate>)pushPermissionDelegate {
+    return _pushPermissionDelegate;
+}
+
+- (void)promptPushPrimer:(NSDictionary *_Nonnull)json {
+    if (@available(iOS 10.0, *)) {
+        [self getNotificationPermissionStatusWithCompletionHandler:^(UNAuthorizationStatus status) {
+            if (status == UNAuthorizationStatusNotDetermined || status == UNAuthorizationStatusDenied) {
+                [self prepareNotificationForDisplay:json];
+            } else {
+                CleverTapLogDebug(self.config.logLevel, @"%@: Push Notification permission is already granted.", self);
+            }
+        }];
+    } else {
+        CleverTapLogDebug(self.config.logLevel, @"%@: Push Notification is avaliable from iOS v10.0 or later", self);
+    }
+}
+
+- (void)promptForPushPermission:(BOOL)isFallbackToSettings {
+    [self promptForOSPushNotificationWithFallbackToSettings:isFallbackToSettings
+                                       andSkipSettingsAlert:NO];
+}
+
+- (void)getNotificationPermissionStatusWithCompletionHandler:(void (^)(UNAuthorizationStatus))completion {
+    if (@available(iOS 10.0, *)) {
+        [self runSerialAsync:^{
+            UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+            [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings* settings) {
+                completion(settings.authorizationStatus);
+            }];
+        }];
+    } else {
+        CleverTapLogDebug(self.config.logLevel, @"%@: Push Notification is avaliable from iOS v10.0 or later", self);
+        completion(UNAuthorizationStatusDenied);
+    }
+}
+
+- (void)notifyPushPermissionResponse:(BOOL)accepted {
+    CleverTapLogInternal(self.config.logLevel, @"%@: Push Permission Response: %s", self, (accepted ? "accepted" : "denied"));
+    if (self.pushPermissionDelegate && [self.pushPermissionDelegate respondsToSelector:@selector(onPushPermissionResponse:)]) {
+        [self.pushPermissionDelegate onPushPermissionResponse:accepted];
+    }
+}
+
+- (void)promptForOSPushNotificationWithFallbackToSettings:(BOOL)isFallbackToSettings
+                                     andSkipSettingsAlert:(BOOL)skipSettingsAlert {
+    if (@available(iOS 10.0, *)) {
+        [self runSerialAsync:^{
+            UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+            [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings* settings) {
+                if (settings.authorizationStatus == UNAuthorizationStatusNotDetermined) {
+                    [center requestAuthorizationWithOptions:(UNAuthorizationOptionSound | UNAuthorizationOptionAlert | UNAuthorizationOptionBadge) completionHandler:^(BOOL granted, NSError * _Nullable error) {
+                        if (granted) {
+                            [self notifyPushPermissionResponse:YES];
+                        } else {
+                            [self notifyPushPermissionResponse:NO];
+                        }
+
+                        if (!error) {
+                            [[self class] runSyncMainQueue: ^{
+                                UIApplication *sharedApplication = [[self class] getSharedApplication];
+                                if (sharedApplication == nil) {
+                                    return;
+                                }
+
+                                [sharedApplication registerForRemoteNotifications];
+                            }];
+                        } else {
+                            CleverTapLogDebug(self.config.logLevel, @"%@: Error in request authorization for remote notification: %@", self, error);
+                        }
+                    }];
+                } else if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
+                    if (isFallbackToSettings) {
+                        if (skipSettingsAlert) {
+                            [self openAppSettingsForPushNotification];
+                        } else {
+                            [self showFallbackToSettingsAlertDialog];
+                        }
+                    } else {
+                        CleverTapLogDebug(self.config.logLevel, @"%@: Notification permission is denied. Please grant notification permission access in your app's settings to send notifications.", self);
+                    }
+                } else {
+                    CleverTapLogDebug(self.config.logLevel, @"%@: Push Notification permission is already granted.", self);
+                }
+            }];
+        }];
+    } else {
+        CleverTapLogDebug(self.config.logLevel, @"%@: Push Notification is avaliable from iOS v10.0 or later", self);
+    }
+}
+
+- (void)showFallbackToSettingsAlertDialog {
+    NSString *alertTitle = @"Permission Not Available";
+    NSString *alertMessage = @"You have previously denied notification permission. Please go to settings to enable notifications.";
+    NSString *positiveBtnText = @"Settings";
+    NSString *negativeBtntext = @"Cancel";
+    CTLocalInApp *localInAppBuilder = [[CTLocalInApp alloc] initWithInAppType:ALERT
+                                                                    titleText:alertTitle
+                                                                  messageText:alertMessage
+                                                      followDeviceOrientation:YES
+                                                              positiveBtnText:positiveBtnText
+                                                              negativeBtnText:negativeBtntext];
+    [localInAppBuilder setFallbackToSettings:YES];
+    [localInAppBuilder setSkipSettingsAlert:YES];
+    NSMutableDictionary *alertSettings = [NSMutableDictionary dictionaryWithDictionary:localInAppBuilder.getLocalInAppSettings];
+    // Update isPushSettingsSoftAlert key as it is internal alert in-app, so that local in-app count will not increase.
+    alertSettings[@"isPushSettingsSoftAlert"] = @1;
+    [self prepareNotificationForDisplay:alertSettings];
+}
+
+- (void)openAppSettingsForPushNotification {
+    NSURL *url = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
+    if (!url) {
+        CleverTapLogDebug(self.config.logLevel, @"%@: Unable to retrieve URL from OpenSettingsURL string", self);
+        return;
+    }
+
+    [[self class] runSyncMainQueue:^{
+        [self openURL:url forModule:@"PushPermission"];
+    }];
+}
+#endif
+
+#pragma mark - Utility
+
++ (BOOL)isValidCleverTapId:(NSString *_Nullable)cleverTapID {
+    return [CTValidator isValidCleverTapId:cleverTapID];
+}
 -(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value{
     _deferClevertapEventsUntilDataLoaded = value;
     [[NSUserDefaults standardUserDefaults] setBool:value forKey:kDeferSendingEventKey];

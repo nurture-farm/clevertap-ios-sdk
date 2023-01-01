@@ -221,8 +221,7 @@ static const int kMaxTags = 3;
 
 - (void)calculateTableViewVisibleFrame {
     CGRect frame = self.tableView.frame;
-    UIInterfaceOrientation orientation = [[CTUIUtils getSharedApplication] statusBarOrientation];
-    BOOL landscape = (orientation == UIInterfaceOrientationLandscapeLeft || orientation == UIInterfaceOrientationLandscapeRight);
+    BOOL landscape = [CTUIUtils isDeviceOrientationLandscape];
     if (landscape) {
         frame.origin.y += self.topContentOffset;
         frame.size.height -= self.topContentOffset;
@@ -429,6 +428,10 @@ static const int kMaxTags = 3;
             UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
             pasteboard.string = copy;
             [self.parentViewController.view ct_makeToast:@"Copied to clipboard" duration:2.0 position:CTToastPositionBottom];
+        } else if ([actionType caseInsensitiveCompare:@"rfp"] == NSOrderedSame) {
+            BOOL fbSettings = link[@"fbSettings"] ? [link[@"fbSettings"] boolValue] : NO;
+            [self.analyticsDelegate messageDidSelectForPushPermission:fbSettings];
+            return;
         }
     }
     [self _notifyMessageSelected:message atIndex:index withButtonIndex:buttonIndex];
@@ -529,7 +532,7 @@ static const int kMaxTags = 3;
     CGFloat topOffset = 1;
     CGFloat bottomOffset = 2;
     CGFloat cellHeight =  cell.bounds.size.height;
-    CGFloat multiplier = UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ? 1.5 : 1;
+    CGFloat multiplier = [CTUIUtils isUserInterfaceIdiomPad] ? 1.5 : 1;
     
     switch (cell.mediaPlayerCellType) {
         case CTMediaPlayerCellTypeTopLandscape:

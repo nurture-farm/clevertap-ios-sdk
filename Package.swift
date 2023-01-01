@@ -13,7 +13,7 @@ let package = Package(
             targets: ["CleverTapSDK"])
     ],
     dependencies: [
-        .package(url: "https://github.com/SDWebImage/SDWebImage.git", from: "5.1.0")
+        .package(url: "https://github.com/SDWebImage/SDWebImage.git", from: "5.11.1")
     ],
     targets: [
         .target(
@@ -25,8 +25,7 @@ let package = Package(
                 "tvOS-Info.plist"
             ],
             resources: [
-                .copy("DigiCertGlobalRootCA.crt"),
-                .copy("DigiCertSHA2SecureServerCA.crt"),
+                .copy("AmazonRootCA1.cer"),
                 .process("InApps/resources"),
                 .process("Inbox/resources")
             ],
