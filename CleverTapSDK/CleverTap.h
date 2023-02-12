@@ -1304,6 +1304,24 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
  */
 + (BOOL)isValidCleverTapId:(NSString *_Nullable)cleverTapID;
 
+/*
+ Calling this clears the existing user session
+ */
+-(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error;
+
+
+/*
+ Set Common Event Data Map.
+ This will be sent directly in eventData
+ */
+-(void)setCommonEventData:(NSDictionary<NSString*,id>*_Nonnull)data;
+
+-(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value;
+
+-(void)setTrackingDeviceId:(NSString* _Nonnull)trackingDeviceId;
+
+-(void)setTrackingEnabled:(BOOL)trackingEnabled;
+
 @end
 
 #pragma clang diagnostic pop

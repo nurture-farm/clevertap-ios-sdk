@@ -16,9 +16,12 @@ extern NSString *const kCTNotifViewedApiDomain;
 #define CLTAP_REGION_LABEL @"CleverTapRegion"
 #define CLTAP_PROXY_DOMAIN_LABEL @"CleverTapProxyDomain"
 #define CLTAP_SPIKY_PROXY_DOMAIN_LABEL @"CleverTapSpikyProxyDomain"
+#define CLTAP_EVENT_PORTAL_DOMAIN_LABEL @"CleverTapEventPortalDomain"
+#define CLTAP_USER_TYPE_LABEL @"CleverTapUserType"
 #define CLTAP_DISABLE_APP_LAUNCH_LABEL @"CleverTapDisableAppLaunched"
 #define CLTAP_USE_CUSTOM_CLEVERTAP_ID_LABEL @"CleverTapUseCustomId"
 #define CLTAP_DISABLE_IDFV_LABEL @"CleverTapDisableIDFV"
+#define CTAP_USE_CUSTOM_DEVICE_ID @"ClevertapUseCustomDeviceId"
 #define CLTAP_BETA_LABEL @"CleverTapBeta"
 #define CLTAP_SESSION_LENGTH_MINS 20
 #define CLTAP_SESSION_LAST_VC_TRAIL @"last_session_vc_trail"
