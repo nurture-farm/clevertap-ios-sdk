@@ -15,13 +15,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         
         // Configure and init the default shared CleverTap instance (add CleverTap Account ID and Account Token in your .plist file)
         CleverTap.autoIntegrate()
-        CleverTap.setDebugLevel(CleverTapLogLevel.off.rawValue)
+        CleverTap.setDebugLevel(CleverTapLogLevel.debug.rawValue)
         CleverTap.sharedInstance()?.enableDeviceNetworkInfoReporting(true)
         
         // Configure and init an additional instance
         let ctConfig = CleverTapInstanceConfig.init(accountId: "R65-RR9-9R5Z", accountToken: "c22-562")
         ctConfig.logLevel = .off
         ctConfig.disableIDFV = true
+        ctConfig.enableFileProtection = false
         let cleverTapAdditionalInstance = CleverTap.instance(with: ctConfig)
         NSLog("additional CleverTap instance created for accountID: %@", cleverTapAdditionalInstance.config.accountId)
         

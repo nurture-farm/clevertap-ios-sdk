@@ -171,7 +171,14 @@ static const int kMaxTags = 3;
     self.tableView.estimatedRowHeight = 44.0;
     self.tableView.tableHeaderView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, self.tableView.bounds.size.width, kCellSpacing)];
     self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, self.tableView.bounds.size.width, 1.0)];
-    self.automaticallyAdjustsScrollViewInsets = NO;
+    if (@available(iOS 11.0, *)) {
+        self.tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        self.automaticallyAdjustsScrollViewInsets = NO;
+#pragma clang diagnostic pop
+    }
     self.edgesForExtendedLayout = UIRectEdgeNone;
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
 }
@@ -221,8 +228,7 @@ static const int kMaxTags = 3;
 
 - (void)calculateTableViewVisibleFrame {
     CGRect frame = self.tableView.frame;
-    UIInterfaceOrientation orientation = [[CTUIUtils getSharedApplication] statusBarOrientation];
-    BOOL landscape = (orientation == UIInterfaceOrientationLandscapeLeft || orientation == UIInterfaceOrientationLandscapeRight);
+    BOOL landscape = [CTUIUtils isDeviceOrientationLandscape];
     if (landscape) {
         frame.origin.y += self.topContentOffset;
         frame.size.height -= self.topContentOffset;
@@ -429,6 +435,10 @@ static const int kMaxTags = 3;
             UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
             pasteboard.string = copy;
             [self.parentViewController.view ct_makeToast:@"Copied to clipboard" duration:2.0 position:CTToastPositionBottom];
+        } else if ([actionType caseInsensitiveCompare:@"rfp"] == NSOrderedSame) {
+            BOOL fbSettings = link[@"fbSettings"] ? [link[@"fbSettings"] boolValue] : NO;
+            [self.analyticsDelegate messageDidSelectForPushPermission:fbSettings];
+            return;
         }
     }
     [self _notifyMessageSelected:message atIndex:index withButtonIndex:buttonIndex];
@@ -529,7 +539,7 @@ static const int kMaxTags = 3;
     CGFloat topOffset = 1;
     CGFloat bottomOffset = 2;
     CGFloat cellHeight =  cell.bounds.size.height;
-    CGFloat multiplier = UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ? 1.5 : 1;
+    CGFloat multiplier = [CTUIUtils isUserInterfaceIdiomPad] ? 1.5 : 1;
     
     switch (cell.mediaPlayerCellType) {
         case CTMediaPlayerCellTypeTopLandscape:
