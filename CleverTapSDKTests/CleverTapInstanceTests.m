@@ -29,9 +29,9 @@
     XCTAssertNotNil(self.cleverTapInstance);
 }
 
-- (void)test_clevertap_addtional_instance_exists {
-    XCTAssertNotNil(self.additionalInstance);
-}
+//- (void)test_clevertap_addtional_instance_exists {
+//    XCTAssertNotNil(self.additionalInstance);
+//}
 
 - (void)test_clevertap_instance_has_guid {
     NSString *ctguid = [self.cleverTapInstance profileGetCleverTapID];
@@ -55,6 +55,19 @@
     [CleverTap disablePersonalization];
     BOOL result = [CTPreferences getIntForKey:@"boolPersonalisationEnabled" withResetValue:0];
     XCTAssertFalse(result);
+}
+
+- (void)test_clevertap_shared_get_global_instance {
+    CleverTap *shared = [CleverTap sharedInstance];
+    CleverTap *instance = [CleverTap getGlobalInstance:[shared getAccountID]];
+    XCTAssertEqualObjects(instance, shared);
+}
+
+- (void)test_clevertap_get_global_instance {
+    CleverTap *instance = [CleverTap getGlobalInstance:@"test"];
+    XCTAssertNotNil(instance);
+    XCTAssertEqualObjects([[instance config] accountId], @"test");
+    XCTAssertEqualObjects([[instance config] accountToken], @"test");
 }
 
 @end

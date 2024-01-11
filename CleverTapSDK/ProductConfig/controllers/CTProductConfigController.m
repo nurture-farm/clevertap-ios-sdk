@@ -1,7 +1,6 @@
 #import "CTProductConfigController.h"
 #import "CTConstants.h"
 #import "CTPreferences.h"
-#import "CTPreferences.h"
 #import "CleverTapInstanceConfig.h"
 #import "CleverTapProductConfigPrivate.h"
 
@@ -189,7 +188,7 @@ typedef void (^CTProductConfigOperationBlock)(void);
 - (void)_archiveData:(NSArray*)data sync:(BOOL)sync {
     NSString *filePath = [self dataArchiveFileName];
     CTProductConfigOperationBlock opBlock = ^{
-        [CTPreferences archiveObject:data forFileName:filePath];
+        [CTPreferences archiveObject:data forFileName:filePath config:self->_config];
     };
     if (sync) {
         opBlock();
