@@ -100,7 +100,6 @@ NSString *const kQUEUE_NAME_PROFILE = @"net_queue_profile";
 NSString *const kQUEUE_NAME_EVENTS = @"events";
 NSString *const kQUEUE_NAME_NOTIFICATIONS = @"notifications";
 
-NSString *const kHANDSHAKE_URL = @"https://eu1.clevertap-prod.com/hello";
 NSString *const kHANDSHAKE_EVENT_PORTAL_URL = @"https://%@?rt=wzrkt.com/hello";
 
 NSString *const kREDIRECT_DOMAIN_KEY = @"CLTAP_REDIRECT_DOMAIN_KEY";
@@ -944,10 +943,8 @@ static bool _trackingEnabled;
         }
         
         
-        
         CleverTapLogInternal(self.config.logLevel, @"%@: starting handshake with %@", self, handshakeURL);
-        NSMutableURLRequest *request = [self createURLRequestFromURL:[[NSURL alloc] initWithString:handshakeURL]];
-        request.HTTPMethod = @"GET";
+        
         // Need to simulate a synchronous request
         dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
         
@@ -1071,7 +1068,7 @@ static bool _trackingEnabled;
     } else {
         endpointDomain = self.domainFactory.redirectDomain;
     }
-    NSString *endpointUrl = [[NSString alloc] initWithFormat:@"https://%@?rt=%@/a1&os=iOS&t=%@&z=%@", _plistInfo.eventPortalDomain, redirectDomain, sdkRevision, accountId];
+    NSString *endpointUrl = [[NSString alloc] initWithFormat:@"https://%@?rt=%@/a1&os=iOS&t=%@&z=%@", _plistInfo.eventPortalDomain, endpointDomain, sdkRevision, accountId];
     currentRequestTimestamp = (int) [[[NSDate alloc] init] timeIntervalSince1970];
     endpointUrl = [endpointUrl stringByAppendingFormat:@"&ts=%d", currentRequestTimestamp];
     return endpointUrl;
