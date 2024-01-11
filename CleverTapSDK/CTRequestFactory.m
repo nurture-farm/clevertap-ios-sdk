@@ -11,7 +11,7 @@
 
 @implementation CTRequestFactory
 
-+ (CTRequest *_Nonnull)helloRequestWithConfig:(CleverTapInstanceConfig *_Nonnull)config {
++ (CTRequest *_Nonnull)helloRequestWithConfig:(CleverTapInstanceConfig *_Nonnull)config url:(NSString *_Nonnull)url {
     return [[CTRequest alloc]initWithHttpMethod:@"GET" config:config params:nil url:kHANDSHAKE_URL];
 }
 
