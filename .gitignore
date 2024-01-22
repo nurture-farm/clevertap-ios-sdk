@@ -36,3 +36,6 @@ ObjCStarter/Podfile.lock
 keys.txt
 # Swift Package Manager
 Package.resolved
+
+Pods
+Podfile.lock

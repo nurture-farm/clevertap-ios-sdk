@@ -14,10 +14,16 @@
         <p id="profilePush"> </p>
         <button onclick="profileSetMultiValues()">Set Profile with multiple values</button>
         <p id="profileSetMultiValues"> </p>
-        <button onclick="profileAddMultiValues()">Set Profile with multiple values</button>
+        <button onclick="profileAddMultiValues()">Add Profile with multiple values</button>
         <p id="profileAddMultiValues"> </p>
-        <button onclick="profileRemoveMultiValues()">Set Profile with multiple values</button>
+        <button onclick="profileRemoveMultiValues()">Remove Profile with multiple values</button>
         <p id="profileRemoveMultiValues"> </p>
+        <button onclick="onUserLogin()">On user login</button>
+        <p id="onUserLogin"> </p>
+        <button onclick="profileIncrementValueBy()">Increment profile value</button>
+        <p id="profileIncrementValueBy"> </p>
+        <button onclick="profileDecrementValueBy()">Decrement profile value</button>
+        <p id="profileDecrementValueBy"> </p>
         
         <script>
             function myFunction() {
@@ -27,8 +33,8 @@
                 
                 if (window.webkit
                    && window.webkit.messageHandlers
-                   && window.webkit.messageHandlers.clevertap) {
-                    window.webkit.messageHandlers.clevertap.postMessage(message);
+                   && window.webkit.messageHandlers.com_clevertap_demo) {
+                    window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
                 }
             }
         
@@ -53,18 +59,18 @@
                 chargeDetails: chargeDetails,
                 items: items
             };
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.clevertap) {
-                window.webkit.messageHandlers.clevertap.postMessage(message);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
             }
         }
         
         function profilePush() {
             document.getElementById("profilePush").innerHTML = 'Profile Pushed.';
-            const props = { name: 'John', email: 'john@mymail.com' };
+            const props = { name: 'John', email: 'john@mymail.com' , score: 0};
             const message = { action:'profilePush', properties: props };
             
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.clevertap) {
-                window.webkit.messageHandlers.clevertap.postMessage(message);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
             }
         }
         
@@ -76,8 +82,8 @@
                 key: 'myStuff'
             };
             
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.clevertap) {
-                window.webkit.messageHandlers.clevertap.postMessage(message);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
             }
         }
         
@@ -90,8 +96,8 @@
                 
             };
             
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.clevertap) {
-                window.webkit.messageHandlers.clevertap.postMessage(message);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
             }
         }
         
@@ -104,10 +110,47 @@
                 
             };
             
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.clevertap) {
-                window.webkit.messageHandlers.clevertap.postMessage(message);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
             }
         }
+            
+            function onUserLogin() {
+                document.getElementById("onUserLogin").innerHTML = 'User logged in';
+                const props = { name: 'JohnWeb', email: 'johnWeb@mymail.com' };
+                const message = { action:'onUserLogin', properties: props };
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                    window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
+                }
+            }
+            
+            function profileIncrementValueBy() {
+                document.getElementById("profileIncrementValueBy").innerHTML = 'Profile value incremented';
+                const message = {
+                    action: 'profileIncrementValueBy',
+                    value: 1,
+                    key: 'score'
+                };
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                    window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
+                }
+            }
+            
+            function profileDecrementValueBy() {
+                document.getElementById("profileDecrementValueBy").innerHTML = 'Profile value decremented';
+                const message = {
+                    action: 'profileDecrementValueBy',
+                    value: 1,
+                    key: 'score'
+                };
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.com_clevertap_demo) {
+                    window.webkit.messageHandlers.com_clevertap_demo.postMessage(message);
+                }
+            }
+            
         
             </script>
         

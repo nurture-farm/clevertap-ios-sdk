@@ -10,10 +10,14 @@ let package = Package(
     products: [
         .library(
             name: "CleverTapSDK",
-            targets: ["CleverTapSDK"])
+            targets: ["CleverTapSDK"]),
+        .library(
+            name: "CleverTapLocation",
+            targets: ["CleverTapLocation"]
+        )
     ],
     dependencies: [
-        .package(url: "https://github.com/SDWebImage/SDWebImage.git", from: "5.1.0")
+        .package(url: "https://github.com/SDWebImage/SDWebImage.git", from: "5.11.1")
     ],
     targets: [
         .target(
@@ -25,8 +29,7 @@ let package = Package(
                 "tvOS-Info.plist"
             ],
             resources: [
-                .copy("DigiCertGlobalRootCA.crt"),
-                .copy("DigiCertSHA2SecureServerCA.crt"),
+                .copy("AmazonRootCA1.cer"),
                 .process("InApps/resources"),
                 .process("Inbox/resources")
             ],
@@ -48,7 +51,8 @@ let package = Package(
                 .headerSearchPath("Inbox/config"),
                 .headerSearchPath("Inbox/controllers"),
                 .headerSearchPath("Inbox/models"),
-                .headerSearchPath("Inbox/views")
+                .headerSearchPath("Inbox/views"),
+                .headerSearchPath("ProductExperiences/")
             ],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
@@ -63,6 +67,20 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
                 .linkedFramework("WebKit")
             ]
+        ),
+        .target(
+            name: "CleverTapLocation",
+            path: "CleverTapLocation",
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("./"),
+                .headerSearchPath("CleverTapLocation/"),
+                .headerSearchPath("CleverTapLocation/Classes/"),
+                .headerSearchPath("CleverTapLocation/Classes")
+            ],
+            linkerSettings: [
+                .linkedFramework("CoreLocation")
+                ]
         )
     ]
 )

@@ -75,6 +75,7 @@ static NSArray *registeredURLSchemes;
         _accountToken = [CTPlistInfo getMetaDataForAttribute:CLTAP_TOKEN_LABEL];
         _accountRegion = [CTPlistInfo getMetaDataForAttribute:CLTAP_REGION_LABEL];
         _proxyDomain = [CTPlistInfo getMetaDataForAttribute:CLTAP_PROXY_DOMAIN_LABEL];
+        _spikyProxyDomain = [CTPlistInfo getMetaDataForAttribute:CLTAP_SPIKY_PROXY_DOMAIN_LABEL];
         _registeredUrlSchemes = [CTPlistInfo getRegisteredURLSchemes];
                 
         NSString *useCustomCleverTapId = [CTPlistInfo getMetaDataForAttribute:CLTAP_USE_CUSTOM_CLEVERTAP_ID_LABEL];
@@ -89,8 +90,20 @@ static NSArray *registeredURLSchemes;
         // Fetch IDFV Flag from INFO.PLIST
         NSString *disableIDFV = [CTPlistInfo getMetaDataForAttribute:CLTAP_DISABLE_IDFV_LABEL];
         _disableIDFV = (disableIDFV && [disableIDFV isEqualToString:@"1"]);
+
+        NSString *enableFileProtection = [CTPlistInfo getMetaDataForAttribute:CLTAP_ENABLE_FILE_PROTECTION];
+        _enableFileProtection = (enableFileProtection && [enableFileProtection isEqualToString:@"1"]);
+
+        NSString *encryptionLevel = [CTPlistInfo getMetaDataForAttribute:CLTAP_ENCRYPTION_LEVEL];
+        [self setEncryption:encryptionLevel];
     }
     return self;
+}
+
+- (void)setCredentialsWithAccountID:(NSString *)accountID token:(NSString *)token region:(NSString *)region {
+    _accountId = accountID;
+    _accountToken = token;
+    _accountRegion = region;
 }
 
 - (void)changeCredentialsWithAccountID:(NSString *)accountID token:(NSString *)token
@@ -100,4 +113,29 @@ static NSArray *registeredURLSchemes;
     _accountRegion = region;
     _proxyDomain = proxyDomain;
 }
+
+- (void)setCredentialsWithAccountID:(NSString *)accountID token:(NSString *)token proxyDomain:(NSString *)proxyDomain {
+    _accountId = accountID;
+    _accountToken = token;
+    _proxyDomain = proxyDomain;
+}
+
+- (void)setCredentialsWithAccountID:(NSString * _Nonnull)accountID token:(NSString * _Nonnull)token proxyDomain:(NSString * _Nonnull)proxyDomain spikyProxyDomain:(NSString * _Nullable)spikyProxyDomain {
+    _accountId = accountID;
+    _accountToken = token;
+    _proxyDomain = proxyDomain;
+    _spikyProxyDomain = spikyProxyDomain;
+}
+
+- (void)setEncryption:(NSString *)encryptionLevel {
+    if (encryptionLevel && [encryptionLevel isEqualToString:@"0"]) {
+        _encryptionLevel = CleverTapEncryptionNone;
+    } else if (encryptionLevel && [encryptionLevel isEqualToString:@"1"]) {
+        _encryptionLevel = CleverTapEncryptionMedium;
+    } else {
+        _encryptionLevel = CleverTapEncryptionNone;
+        CleverTapLogStaticInternal(@"Supported encryption levels are only 0 and 1. Setting it to 0 by default");
+    }
+}
+
 @end

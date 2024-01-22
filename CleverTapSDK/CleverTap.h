@@ -18,6 +18,7 @@
 #define CLEVERTAP_NO_GEOFENCE_SUPPORT 1
 #endif
 
+@protocol CleverTapDomainDelegate;
 @protocol CleverTapSyncDelegate;
 @protocol CleverTapURLDelegate;
 @protocol CleverTapPushNotificationDelegate;
@@ -30,6 +31,7 @@
 @class CleverTapInstanceConfig;
 @class CleverTapFeatureFlags;
 @class CleverTapProductConfig;
+#import "CTVar.h"
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCUnusedMethodInspection"
@@ -46,6 +48,17 @@ typedef NS_ENUM(int, CleverTapChannel) {
     CleverTapInAppNotification = 2
 };
 
+typedef NS_ENUM(int, CTSignedCallEvent) {
+    SIGNED_CALL_OUTGOING_EVENT = 0,
+    SIGNED_CALL_INCOMING_EVENT,
+    SIGNED_CALL_END_EVENT
+};
+
+typedef NS_ENUM(int, CleverTapEncryptionLevel) {
+    CleverTapEncryptionNone = 0,
+    CleverTapEncryptionMedium = 1
+};
+
 @interface CleverTap : NSObject
 
 #pragma mark - Properties
@@ -59,6 +72,12 @@ typedef NS_ENUM(int, CleverTapChannel) {
  */
 
 @property (nonatomic, strong, readonly, nonnull) CleverTapInstanceConfig *config;
+
+/**
+ CleverTap region/ domain value for signed call domain setup
+ */
+@property (nonatomic, strong, readwrite, nullable) NSString *signedCallDomain;
+
 
 /* ------------------------------------------------------------------------------------------------------
  * Initialization
@@ -160,6 +179,19 @@ typedef NS_ENUM(int, CleverTapChannel) {
  @method
  
  @abstract
+ Returns the CleverTap instance corresponding to the CleverTap accountId param.
+ 
+ @discussion
+ Returns the instance if such is already created, otherwise loads it from cache.
+ 
+ @param accountId  the CleverTap account id
+ */
++ (CleverTap *_Nullable)getGlobalInstance:(NSString *_Nonnull)accountId;
+
+/*!
+ @method
+ 
+ @abstract
  Set the CleverTap AccountID and Token
  
  @discussion
@@ -221,6 +253,39 @@ typedef NS_ENUM(int, CleverTapChannel) {
  
  */
 + (void)setCredentialsWithAccountID:(NSString * _Nonnull)accountID token:(NSString * _Nonnull)token region:(NSString * _Nonnull)region;
+
+/*!
+ @method
+ 
+ @abstract
+ Sets the CleverTap AccountID, token and proxy domain URL
+ 
+ @discussion
+ Sets the CleverTap account credentials and proxy domain URL. Once the default shared instance is intialized subsequent calls will be ignored.
+ Only has effect on the default shared instance.
+ 
+ @param accountID  the CleverTap account id
+ @param token the CleverTap account token
+ @param proxyDomain the domain of the proxy server eg: example.com or subdomain.example.com
+ */
++ (void)setCredentialsWithAccountID:(NSString * _Nonnull)accountID token:(NSString * _Nonnull)token proxyDomain:(NSString * _Nonnull)proxyDomain;
+
+/*!
+ @method
+ 
+ @abstract
+ Sets the CleverTap AccountID, token, proxy domain URL for APIs and spiky proxy domain URL for push impression APIs
+ 
+ @discussion
+ Sets the CleverTap account credentials and proxy domain URL. Once the default shared instance is intialized subsequent calls will be ignored.
+ Only has effect on the default shared instance.
+ 
+ @param accountID  the CleverTap account id
+ @param token the CleverTap account token
+ @param proxyDomain the domain of the proxy server eg: example.com or subdomain.example.com
+ @param spikyProxyDomain the domain of the proxy server for push impression eg: example.com or subdomain.example.com
+ */
++ (void)setCredentialsWithAccountID:(NSString * _Nonnull)accountID token:(NSString * _Nonnull)token proxyDomain:(NSString * _Nonnull)proxyDomain spikyProxyDomain:(NSString * _Nonnull)spikyProxyDomain;
 
 /*!
  @method
@@ -294,25 +359,6 @@ typedef NS_ENUM(int, CleverTapChannel) {
  
  */
 extern NSString * _Nonnull const CleverTapGeofencesDidUpdateNotification;
-
-
-/*!
- @method
- 
- @abstract
- Get the device location if available.  Calling this will prompt the user location permissions dialog.
- 
- Please be sure to include the NSLocationWhenInUseUsageDescription key in your Info.plist.  See https://developer.apple.com/library/ios/documentation/General/Reference/InfoPlistKeyReference/Articles/CocoaKeys.html#//apple_ref/doc/uid/TP40009251-SW26
- 
- Uses desired accuracy of kCLLocationAccuracyHundredMeters.
- 
- If you need background location updates or finer accuracy please implement your own location handling.  Please see https://developer.apple.com/library/ios/documentation/CoreLocation/Reference/CLLocationManager_Class/index.html for more info.
- 
- @discussion
- Optional.  You can use location to pass it to CleverTap via the setLocation API
- for, among other things, more fine-grained geo-targeting and segmentation purposes.  To enable, build the SDK with the preprocessor macro CLEVERTAP_LOCATION.
- */
-+ (void)getLocationWithSuccess:(void (^ _Nonnull)(CLLocationCoordinate2D location))success andError:(void (^_Nullable)(NSString * _Nullable reason))error;
 
 /*!
  @method
@@ -600,6 +646,18 @@ extern NSString * _Nonnull const CleverTapGeofencesDidUpdateNotification;
  
  */
 - (NSString *_Nullable)profileGetCleverTapID;
+
+/*!
+ @method
+ 
+ @abstract
+ Get CleverTap account Id.
+ 
+ @discussion
+ The CleverTap account Id is the unique identifier assigned to the Account by CleverTap.
+ 
+ */
+- (NSString *_Nullable)getAccountID;
 
 /*!
  @method
@@ -1155,6 +1213,28 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
  @method
  
  @abstract
+ Set the Library name and version for Auxiliary SDKs
+ 
+ @discussion
+ Call this to method to set library name and version in the Auxiliary SDK
+ */
+- (void)setCustomSdkVersion:(NSString * _Nonnull)name version:(int)version;
+
+/*!
+ @method
+ 
+ @abstract
+ Updates a user locale after session start.
+ 
+ @discussion
+ Call this to method to set locale
+ */
+- (void)setLocale:(NSLocale * _Nonnull)locale;
+
+/*!
+ @method
+ 
+ @abstract
  Store the users location for geofences on the default shared CleverTap instance.
  
  @discussion
@@ -1198,8 +1278,128 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 #if defined(CLEVERTAP_HOST_WATCHOS)
 /** HostWatchOS
  */
-- (BOOL)handleMessage:(NSDictionary<NSString *, id> *)message forWatchSession:(WCSession *)session API_AVAILABLE(ios(9.0));
+- (BOOL)handleMessage:(NSDictionary<NSString *, id> *_Nonnull)message forWatchSession:(WCSession *_Nonnull)session API_AVAILABLE(ios(9.0));
 #endif
+
+/*!
+ @method
+ 
+ @abstract
+ Record Signed Call System Events.
+ 
+ @param calldetails call details dictionary
+ */
+- (void)recordSignedCallEvent:(int)eventRawValue forCallDetails:(NSDictionary *_Nonnull)calldetails;
+
+/*!
+ @method
+ 
+ @abstract
+ The `CTDomainDelegate` protocol provides methods for notifying your application (the adopting delegate) about domain/ region changes.
+ 
+ @see CleverTap+DCDomain.h
+ 
+ @discussion
+ This sets the CTDomainDelegate
+ 
+ @param delegate  an object conforming to the CTDomainDelegate Protocol
+ */
+- (void)setDomainDelegate:(id <CleverTapDomainDelegate> _Nullable)delegate;
+
+/*!
+ @method
+ 
+ @abstract
+ Get region/ domain string value
+ */
+- (NSString *_Nullable)getDomainString;
+
+/*!
+ @method
+ 
+ @abstract
+ Checks if a custom CleverTapID is valid
+ */
++ (BOOL)isValidCleverTapId:(NSString *_Nullable)cleverTapID;
+
+#pragma mark Product Experiences - Vars
+
+/*!
+ @method
+ 
+ @abstract
+ Adds a callback to be invoked when variables are initialised with server values. Will be called each time new values are fetched.
+ 
+ @param block a callback to add.
+ */
+- (void)onVariablesChanged:(CleverTapVariablesChangedBlock _Nonnull )block;
+
+/*!
+ @method
+ 
+ @abstract
+ Adds a callback to be invoked only once when variables are initialised with server values.
+ 
+ @param block a callback to add.
+ */
+- (void)onceVariablesChanged:(CleverTapVariablesChangedBlock _Nonnull )block;
+ 
+/*!
+ @method
+ 
+ @abstract
+ Uploads variables to the server. Requires Development/Debug build/configuration.
+ */
+- (void)syncVariables;
+
+/*!
+ @method
+ 
+ @abstract
+ Uploads variables to the server.
+ 
+ @param isProduction Provide `true` if variables must be sync in Productuon build/configuration.
+ */
+- (void)syncVariables:(BOOL)isProduction;
+
+/*!
+ @method
+ 
+ @abstract
+ Forces variables to update from the server.
+ 
+ @discussion
+ Forces variables to update from the server. If variables have changed, the appropriate callbacks will fire. Use sparingly as if the app is updated, you'll have to deal with potentially inconsistent state or user experience.
+ The provided callback has a boolean flag whether the update was successful or not. The callback fires regardless
+ of whether the variables have changed.
+ 
+ @param block a callback with a boolean flag whether the update was successful.
+ */
+- (void)fetchVariables:(CleverTapFetchVariablesBlock _Nullable)block;
+
+/*!
+ @method
+ 
+ @abstract
+ Get an instance of a variable or a group.
+ 
+ @param name The name of the variable or the group.
+ 
+ @return
+ The instance of the variable or the group, or nil if not created yet.
+
+ */
+- (CTVar * _Nullable)getVariable:(NSString * _Nonnull)name;
+
+/*!
+ @method
+ 
+ @abstract
+ Get a copy of the current value of a variable or a group.
+ 
+ @param name The name of the variable or the group.
+ */
+- (id _Nullable)getVariableValue:(NSString * _Nonnull)name;
 
 @end
 

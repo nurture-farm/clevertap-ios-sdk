@@ -2,16 +2,25 @@
 #import "CleverTap.h"
 #import "CleverTapInstanceConfig.h"
 #import "CleverTapInstanceConfigPrivate.h"
+#import "CleverTapJSInterfacePrivate.h"
 
 @interface CleverTapJSInterface (){}
 
 @property (nonatomic, strong) CleverTapInstanceConfig *config;
-
 @end
 
 @implementation CleverTapJSInterface
 
 - (instancetype)initWithConfig:(CleverTapInstanceConfig *)config {
+    if (self = [super init]) {
+        _config = config;
+        _wv_init = YES;
+        [self initUserContentController];
+    }
+    return self;
+}
+
+- (instancetype)initWithConfigForInApps:(CleverTapInstanceConfig *)config {
     if (self = [super init]) {
         _config = config;
         [self initUserContentController];
@@ -33,6 +42,9 @@
             cleverTap = [CleverTap instanceWithConfig:self.config];
         }
         if (cleverTap) {
+            if (_wv_init) {
+                cleverTap.config.wv_init = YES;
+            }
             [self handleMessageFromWebview:message.body forInstance:cleverTap];
         }
     }
@@ -41,7 +53,7 @@
 - (void)handleMessageFromWebview:(NSDictionary<NSString *,id> *)message forInstance:(CleverTap *)cleverTap {
     NSString *action = [message objectForKey:@"action"];
     if ([action isEqual:@"recordEventWithProps"]) {
-        [cleverTap recordEvent: message[@"event"] withProps: message[@"props"]];
+        [cleverTap recordEvent: message[@"event"] withProps: message[@"properties"]];
     } else if ([action isEqual: @"profilePush"]) {
         [cleverTap profilePush: message[@"properties"]];
     } else if ([action isEqual: @"profileSetMultiValues"]) {
@@ -59,6 +71,12 @@
     }
     else if ([action isEqual: @"recordChargedEvent"]) {
         [cleverTap recordChargedEventWithDetails: message[@"chargeDetails"] andItems: message[@"items"]];
+    }else if ([action isEqual: @"onUserLogin"]) {
+        [cleverTap onUserLogin: message[@"properties"]];
+    }else if ([action isEqual: @"profileIncrementValueBy"]) {
+        [cleverTap profileIncrementValueBy: message[@"value"] forKey: message[@"key"]];
+    }else if ([action isEqual: @"profileDecrementValueBy"]) {
+        [cleverTap profileDecrementValueBy: message[@"value"] forKey: message[@"key"]];
     }
 }
 
