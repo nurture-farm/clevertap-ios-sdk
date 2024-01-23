@@ -177,20 +177,20 @@ typedef NS_ENUM(int, CleverTapEncryptionLevel) {
 
 /*!
  @method
- 
+
  @abstract
  Returns the CleverTap instance corresponding to the CleverTap accountId param.
- 
+
  @discussion
  Returns the instance if such is already created, otherwise loads it from cache.
- 
+
  @param accountId  the CleverTap account id
  */
 + (CleverTap *_Nullable)getGlobalInstance:(NSString *_Nonnull)accountId;
 
 /*!
  @method
- 
+
  @abstract
  Set the CleverTap AccountID and Token
  
@@ -1214,7 +1214,7 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
  
  @abstract
  Set the Library name and version for Auxiliary SDKs
- 
+
  @discussion
  Call this to method to set library name and version in the Auxiliary SDK
  */
@@ -1222,10 +1222,10 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 
 /*!
  @method
- 
+
  @abstract
  Updates a user locale after session start.
- 
+
  @discussion
  Call this to method to set locale
  */
@@ -1233,7 +1233,7 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 
 /*!
  @method
- 
+
  @abstract
  Store the users location for geofences on the default shared CleverTap instance.
  
@@ -1293,7 +1293,7 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 
 /*!
  @method
- 
+
  @abstract
  The `CTDomainDelegate` protocol provides methods for notifying your application (the adopting delegate) about domain/ region changes.
  
@@ -1322,31 +1322,49 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
  */
 + (BOOL)isValidCleverTapId:(NSString *_Nullable)cleverTapID;
 
+/*
+ Calling this clears the existing user session
+ */
+-(void) resetUser:(void(^)(void))onSuccess onFailure:(void(^)(NSError*))error;
+
+
+/*
+ Set Common Event Data Map.
+ This will be sent directly in eventData
+ */
+-(void)setCommonEventData:(NSDictionary<NSString*,id>*_Nonnull)data;
+
+-(void)deferClevertapEventsUntilProfileAndDeviceIsFetched:(BOOL)value;
+
+-(void)setTrackingDeviceId:(NSString* _Nonnull)trackingDeviceId;
+
+-(void)setTrackingEnabled:(BOOL)trackingEnabled;
+
 #pragma mark Product Experiences - Vars
 
 /*!
  @method
- 
+
  @abstract
  Adds a callback to be invoked when variables are initialised with server values. Will be called each time new values are fetched.
- 
+
  @param block a callback to add.
  */
 - (void)onVariablesChanged:(CleverTapVariablesChangedBlock _Nonnull )block;
 
 /*!
  @method
- 
+
  @abstract
  Adds a callback to be invoked only once when variables are initialised with server values.
- 
+
  @param block a callback to add.
  */
 - (void)onceVariablesChanged:(CleverTapVariablesChangedBlock _Nonnull )block;
- 
+
 /*!
  @method
- 
+
  @abstract
  Uploads variables to the server. Requires Development/Debug build/configuration.
  */
@@ -1354,37 +1372,37 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 
 /*!
  @method
- 
+
  @abstract
  Uploads variables to the server.
- 
+
  @param isProduction Provide `true` if variables must be sync in Productuon build/configuration.
  */
 - (void)syncVariables:(BOOL)isProduction;
 
 /*!
  @method
- 
+
  @abstract
  Forces variables to update from the server.
- 
+
  @discussion
  Forces variables to update from the server. If variables have changed, the appropriate callbacks will fire. Use sparingly as if the app is updated, you'll have to deal with potentially inconsistent state or user experience.
  The provided callback has a boolean flag whether the update was successful or not. The callback fires regardless
  of whether the variables have changed.
- 
+
  @param block a callback with a boolean flag whether the update was successful.
  */
 - (void)fetchVariables:(CleverTapFetchVariablesBlock _Nullable)block;
 
 /*!
  @method
- 
+
  @abstract
  Get an instance of a variable or a group.
- 
+
  @param name The name of the variable or the group.
- 
+
  @return
  The instance of the variable or the group, or nil if not created yet.
 
@@ -1393,10 +1411,10 @@ extern NSString * _Nonnull const CleverTapProfileDidInitializeNotification;
 
 /*!
  @method
- 
+
  @abstract
  Get a copy of the current value of a variable or a group.
- 
+
  @param name The name of the variable or the group.
  */
 - (id _Nullable)getVariableValue:(NSString * _Nonnull)name;

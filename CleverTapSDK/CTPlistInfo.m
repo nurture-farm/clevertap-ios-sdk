@@ -76,6 +76,8 @@ static NSArray *registeredURLSchemes;
         _accountRegion = [CTPlistInfo getMetaDataForAttribute:CLTAP_REGION_LABEL];
         _proxyDomain = [CTPlistInfo getMetaDataForAttribute:CLTAP_PROXY_DOMAIN_LABEL];
         _spikyProxyDomain = [CTPlistInfo getMetaDataForAttribute:CLTAP_SPIKY_PROXY_DOMAIN_LABEL];
+        _eventPortalDomain = [CTPlistInfo getMetaDataForAttribute:CLTAP_EVENT_PORTAL_DOMAIN_LABEL];
+        _userType = [CTPlistInfo getMetaDataForAttribute:CLTAP_USER_TYPE_LABEL];
         _registeredUrlSchemes = [CTPlistInfo getRegisteredURLSchemes];
                 
         NSString *useCustomCleverTapId = [CTPlistInfo getMetaDataForAttribute:CLTAP_USE_CUSTOM_CLEVERTAP_ID_LABEL];
@@ -91,9 +93,12 @@ static NSArray *registeredURLSchemes;
         NSString *disableIDFV = [CTPlistInfo getMetaDataForAttribute:CLTAP_DISABLE_IDFV_LABEL];
         _disableIDFV = (disableIDFV && [disableIDFV isEqualToString:@"1"]);
 
+        NSString *useCustomDeviceId = [CTPlistInfo getMetaDataForAttribute:CTAP_USE_CUSTOM_DEVICE_ID];
+        _useCustomDeviceId = (useCustomDeviceId && [useCustomDeviceId isEqualToString:@"1"]);
+
         NSString *enableFileProtection = [CTPlistInfo getMetaDataForAttribute:CLTAP_ENABLE_FILE_PROTECTION];
         _enableFileProtection = (enableFileProtection && [enableFileProtection isEqualToString:@"1"]);
-
+        
         NSString *encryptionLevel = [CTPlistInfo getMetaDataForAttribute:CLTAP_ENCRYPTION_LEVEL];
         [self setEncryption:encryptionLevel];
     }
